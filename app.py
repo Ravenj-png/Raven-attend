@@ -451,6 +451,14 @@ def init_db():
     db.session.commit()
     print("✅ Database initialized with super admins")
 
+@app.route('/')
+def home():
+    return jsonify({
+        "message": "Raven Attendance API is running",
+        "status": "online",
+        "endpoints": ["/api/auth/login", "/api/auth/verify"]
+    })
+
 # ============ RUN APP ============
 if __name__ == '__main__':
     with app.app_context():
