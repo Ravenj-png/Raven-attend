@@ -1,8 +1,7 @@
 # ============ IMPORTS ============
 import os
 import jwt
-from datetime import timedelta
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
@@ -13,24 +12,24 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# ============ INITIALIZATION ============
+# ============ APP CONFIGURATION ============
 app = Flask(__name__)
-CORS(app, origins=[os.getenv('CORS_ORIGIN', '*')]))
 
-# Database
+# CORS — supports comma-separated origins
+cors_origins = os.getenv('CORS_ORIGIN', '*')
+if cors_origins != '*':
+    cors_origins = [origin.strip() for origin in cors_origins.split(',')]
+CORS(app, origins=cors_origins)
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 db = SQLAlchemy(app)
-
-# Password Hashing with Argon2
 ph = PasswordHasher()
 
-# Rate Limiter
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -104,14 +103,12 @@ class TeacherAssignment(db.Model):
     assigned_by = db.Column(db.String(255))
     assigned_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-# ============ HELPER FUNCTIONS ============
+# ============ HELPERS ============
 
 def hash_password(password):
-    """Hash password using Argon2 with salt"""
     return ph.hash(password)
 
 def verify_password(password, password_hash):
-    """Verify password against Argon2 hash"""
     try:
         ph.verify(password_hash, password)
         return True
@@ -119,7 +116,6 @@ def verify_password(password, password_hash):
         return False
 
 def generate_token(user_id, tenant_id, role):
-    """Generate JWT token"""
     payload = {
         'user_id': user_id,
         'tenant_id': tenant_id,
@@ -129,13 +125,11 @@ def generate_token(user_id, tenant_id, role):
     return jwt.encode(payload, os.getenv('JWT_SECRET'), algorithm='HS256')
 
 def token_required(f):
-    """Decorator to verify JWT token"""
     @wraps(f)
     def decorated(*args, **kwargs):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')
         if not token:
             return jsonify({'error': 'Token missing'}), 401
-
         try:
             data = jwt.decode(token, os.getenv('JWT_SECRET'), algorithms=['HS256'])
             g.user_id = data['user_id']
@@ -145,12 +139,10 @@ def token_required(f):
             return jsonify({'error': 'Token expired'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Invalid token'}), 401
-
         return f(*args, **kwargs)
     return decorated
 
 def admin_only(f):
-    """Decorator to allow only admins"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if g.role not in ['super_admin', 'admin']:
@@ -158,15 +150,11 @@ def admin_only(f):
         return f(*args, **kwargs)
     return decorated
 
-# Get super admin emails from env
-SUPER_ADMIN_EMAILS = os.getenv('SUPER_ADMIN_EMAILS', 'admin1@school.com,admin2@school.com,admin3@school.com').split(',')
-
-# ============ AUTHENTICATION ENDPOINTS ============
+# ============ AUTHENTICATION ============
 
 @app.route('/api/auth/login', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute")
 def login():
-    """Login endpoint with rate limiting"""
     data = request.get_json()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
@@ -175,13 +163,11 @@ def login():
         return jsonify({'error': 'Email and password required'}), 400
 
     user = User.query.filter_by(email=email).first()
-    if not user:
-        return jsonify({'error': 'Invalid credentials'}), 401
-
-    if not verify_password(password, user.password_hash):
+    if not user or not verify_password(password, user.password_hash):
         return jsonify({'error': 'Invalid credentials'}), 401
 
     token = generate_token(user.id, user.tenant_id, user.role)
+    tenant = Tenant.query.get(user.tenant_id)
 
     return jsonify({
         'token': token,
@@ -191,15 +177,19 @@ def login():
             'email': user.email,
             'role': user.role,
             'tenant_id': user.tenant_id
+        },
+        'tenant': {
+            'id': tenant.id if tenant else None,
+            'name': tenant.name if tenant else 'Unknown'
         }
     })
 
 @app.route('/api/auth/verify', methods=['GET'])
 @token_required
 def verify_token():
-    return jsonify({'valid': True, 'role': g.role})
+    return jsonify({'valid': True, 'role': g.role, 'tenant_id': g.tenant_id})
 
-# ============ USER MANAGEMENT ============
+# ============ USERS / TEACHERS ============
 
 @app.route('/api/users/teachers', methods=['POST'])
 @token_required
@@ -213,22 +203,17 @@ def add_teacher():
 
     if not email or not name or not password:
         return jsonify({'error': 'Email, name, and password required'}), 400
-
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'User already exists'}), 409
 
-    new_user = User(
-        email=email,
-        name=name,
+    user = User(
+        email=email, name=name,
         password_hash=hash_password(password),
-        role=role,
-        tenant_id=g.tenant_id
+        role=role, tenant_id=g.tenant_id
     )
-
-    db.session.add(new_user)
+    db.session.add(user)
     db.session.commit()
-
-    return jsonify({'message': 'Teacher added successfully'}), 201
+    return jsonify({'message': 'Teacher added', 'id': user.id}), 201
 
 @app.route('/api/users/teachers', methods=['GET'])
 @token_required
@@ -237,7 +222,7 @@ def get_teachers():
     teachers = User.query.filter_by(tenant_id=g.tenant_id).filter(User.role.in_(['teacher', 'classteacher'])).all()
     return jsonify([{'id': t.id, 'name': t.name, 'email': t.email, 'role': t.role} for t in teachers])
 
-# ============ CLASS MANAGEMENT ============
+# ============ CLASSES ============
 
 @app.route('/api/classes', methods=['POST'])
 @token_required
@@ -247,6 +232,7 @@ def create_class():
     name = data.get('name', '').strip()
     if not name:
         return jsonify({'error': 'Class name required'}), 400
+
     new_class = Class(name=name, tenant_id=g.tenant_id)
     db.session.add(new_class)
     db.session.commit()
@@ -258,7 +244,7 @@ def get_classes():
     classes = Class.query.filter_by(tenant_id=g.tenant_id).all()
     return jsonify([{'id': c.id, 'name': c.name} for c in classes])
 
-# ============ SUBJECT MANAGEMENT ============
+# ============ SUBJECTS ============
 
 @app.route('/api/subjects', methods=['POST'])
 @token_required
@@ -268,10 +254,11 @@ def create_subject():
     name = data.get('name', '').strip()
     if not name:
         return jsonify({'error': 'Subject name required'}), 400
-    new_subject = Subject(name=name, tenant_id=g.tenant_id)
-    db.session.add(new_subject)
+
+    subject = Subject(name=name, tenant_id=g.tenant_id)
+    db.session.add(subject)
     db.session.commit()
-    return jsonify({'id': new_subject.id, 'name': new_subject.name}), 201
+    return jsonify({'id': subject.id, 'name': subject.name}), 201
 
 @app.route('/api/subjects', methods=['GET'])
 @token_required
@@ -281,7 +268,7 @@ def get_subjects():
     ).all()
     return jsonify([{'id': s.id, 'name': s.name} for s in subjects])
 
-# ============ STUDENT MANAGEMENT ============
+# ============ STUDENTS ============
 
 @app.route('/api/students', methods=['POST'])
 @token_required
@@ -306,13 +293,13 @@ def register_student():
         db.session.commit()
         return jsonify({'message': 'Student updated', 'id': existing.id})
 
-    new_student = Student(
+    student = Student(
         name=name, class_id=class_id, tenant_id=g.tenant_id,
         term_registered=term, status=status, added_by=str(g.user_id)
     )
-    db.session.add(new_student)
+    db.session.add(student)
     db.session.commit()
-    return jsonify({'message': 'Student registered', 'id': new_student.id}), 201
+    return jsonify({'message': 'Student registered', 'id': student.id}), 201
 
 @app.route('/api/students', methods=['GET'])
 @token_required
@@ -324,10 +311,91 @@ def get_students():
         query = query.filter_by(term_registered=term)
     if class_id:
         query = query.filter_by(class_id=class_id)
-    students = query.all()
-    return jsonify([{'id': s.id, 'name': s.name, 'class_id': s.class_id, 'status': s.status, 'term_registered': s.term_registered} for s in students])
 
-# ============ ATTENDANCE MANAGEMENT ============
+    students = query.all()
+    return jsonify([{
+        'id': s.id,
+        'name': s.name,
+        'classId': s.class_id,
+        'tenantId': s.tenant_id,
+        'termRegistered': s.term_registered,
+        'status': s.status,
+        'addedBy': s.added_by,
+        'lastUpdated': s.last_updated.isoformat() if s.last_updated else None
+    } for s in students])
+
+@app.route('/api/students/<int:student_id>', methods=['PUT'])
+@token_required
+@admin_only
+def update_student(student_id):
+    data = request.get_json()
+    student = Student.query.filter_by(id=student_id, tenant_id=g.tenant_id).first()
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+
+    if 'status' in data:
+        student.status = data['status']
+    if 'name' in data:
+        student.name = data['name'].strip()
+    if 'class_id' in data:
+        student.class_id = data['class_id']
+
+    student.last_updated = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({'message': 'Student updated'})
+
+@app.route('/api/students/cleanup', methods=['POST'])
+@token_required
+@admin_only
+def cleanup_students():
+    term = request.get_json().get('term', '')
+    if not term:
+        return jsonify({'error': 'Term required'}), 400
+
+    result = Student.query.filter_by(tenant_id=g.tenant_id).filter(
+        Student.term_registered != term
+    ).delete(synchronize_session=False)
+
+    db.session.commit()
+    return jsonify({'message': f'Removed {result} inactive students'})
+
+# ============ TEACHER ASSIGNMENTS ============
+
+@app.route('/api/teacher-assignments', methods=['POST'])
+@token_required
+@admin_only
+def assign_subject():
+    data = request.get_json()
+    teacher_email = data.get('teacher_email', '').strip().lower()
+    class_id = data.get('class_id')
+    subject_id = data.get('subject_id')
+
+    if not teacher_email or not class_id or not subject_id:
+        return jsonify({'error': 'All fields required'}), 400
+
+    assignment = TeacherAssignment(
+        teacher_email=teacher_email,
+        class_id=class_id,
+        subject_id=subject_id,
+        tenant_id=g.tenant_id,
+        assigned_by=str(g.user_id)
+    )
+    db.session.add(assignment)
+    db.session.commit()
+    return jsonify({'message': 'Subject assigned'})
+
+@app.route('/api/teacher-assignments', methods=['GET'])
+@token_required
+def get_assignments():
+    assignments = TeacherAssignment.query.filter_by(tenant_id=g.tenant_id).all()
+    return jsonify([{
+        'id': a.id,
+        'teacherEmail': a.teacher_email,
+        'classId': a.class_id,
+        'subjectId': a.subject_id
+    } for a in assignments])
+
+# ============ ATTENDANCE ============
 
 @app.route('/api/attendance', methods=['POST'])
 @token_required
@@ -370,6 +438,7 @@ def get_attendance():
     class_id = request.args.get('class_id')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
+    limit = request.args.get('limit', 100, type=int)
 
     query = Attendance.query.filter_by(tenant_id=g.tenant_id)
     if term:
@@ -381,12 +450,17 @@ def get_attendance():
     if end_date:
         query = query.filter(Attendance.date <= end_date)
 
-    attendance = query.order_by(Attendance.date.desc()).limit(100).all()
+    records = query.order_by(Attendance.date.desc()).limit(limit).all()
     return jsonify([{
-        'id': a.id, 'date': a.date.isoformat(), 'class_id': a.class_id,
-        'subject_id': a.subject_id, 'session': a.session, 'records': a.records,
-        'term': a.term, 'taken_by': a.taken_by
-    } for a in attendance])
+        'id': a.id,
+        'date': a.date.isoformat(),
+        'classId': a.class_id,
+        'subjectId': a.subject_id,
+        'session': a.session,
+        'records': a.records,
+        'term': a.term,
+        'takenBy': a.taken_by
+    } for a in records])
 
 # ============ REPORTS ============
 
@@ -401,15 +475,26 @@ def attendance_summary():
         query = query.filter_by(class_id=class_id)
 
     attendance_records = query.all()
-
     stats = {}
+
     for record in attendance_records:
-        for student_id, status in record.records.items():
-            sid = str(student_id)
-            if sid not in stats:
-                stats[sid] = {'present': 0, 'absent': 0, 'sick': 0, 'emergency': 0, 'total': 0}
-            stats[sid][status] = stats[sid].get(status, 0) + 1
-            stats[sid]['total'] += 1
+        # Handle list format: [{"studentId": 1, "status": "present"}, ...]
+        if isinstance(record.records, list):
+            for rec in record.records:
+                sid = str(rec.get('studentId'))
+                status = rec.get('status')
+                if sid and status:
+                    if sid not in stats:
+                        stats[sid] = {'present': 0, 'absent': 0, 'sick': 0, 'emergency': 0, 'total': 0}
+                    stats[sid][status] = stats[sid].get(status, 0) + 1
+                    stats[sid]['total'] += 1
+        # Handle legacy dict format: {"1": "present", ...}
+        elif isinstance(record.records, dict):
+            for sid, status in record.records.items():
+                if sid not in stats:
+                    stats[sid] = {'present': 0, 'absent': 0, 'sick': 0, 'emergency': 0, 'total': 0}
+                stats[sid][status] = stats[sid].get(status, 0) + 1
+                stats[sid]['total'] += 1
 
     student_ids = [int(sid) for sid in stats.keys()]
     students = Student.query.filter(Student.id.in_(student_ids)).all()
@@ -419,49 +504,79 @@ def attendance_summary():
     for student_id, s in stats.items():
         rate = (s['present'] / s['total'] * 100) if s['total'] > 0 else 0
         result.append({
-            'student_id': int(student_id),
-            'student_name': student_map.get(int(student_id), 'Unknown'),
-            'present': s['present'], 'absent': s['absent'],
-            'sick': s['sick'], 'emergency': s['emergency'],
-            'total': s['total'], 'attendance_rate': round(rate, 1)
+            'studentId': int(student_id),
+            'studentName': student_map.get(int(student_id), 'Unknown'),
+            'present': s['present'],
+            'absent': s['absent'],
+            'sick': s['sick'],
+            'emergency': s['emergency'],
+            'total': s['total'],
+            'attendanceRate': round(rate, 1)
         })
 
     return jsonify(result)
 
-# ============ INITIALIZE DATABASE ============
+# ============ SCHOOL DATA (VIEW ALL) ============
+
+@app.route('/api/school/data', methods=['GET'])
+@token_required
+@admin_only
+def school_data():
+    term = request.args.get('term', '')
+    teachers = User.query.filter_by(tenant_id=g.tenant_id).filter(User.role.in_(['teacher', 'classteacher'])).all()
+    students = Student.query.filter_by(tenant_id=g.tenant_id, term_registered=term).all()
+    classes = Class.query.filter_by(tenant_id=g.tenant_id).all()
+    subjects = Subject.query.filter((Subject.tenant_id == g.tenant_id) | (Subject.tenant_id.is_(None))).all()
+
+    return jsonify({
+        'teachers': [{'id': t.id, 'name': t.name, 'email': t.email, 'role': t.role} for t in teachers],
+        'students': [{'id': s.id, 'name': s.name, 'status': s.status} for s in students],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'subjects': [{'id': s.id, 'name': s.name} for s in subjects]
+    })
+
+# ============ INITIALIZATION ============
 
 def init_db():
     db.create_all()
 
+    # Create default tenant
     tenant = Tenant.query.filter_by(name='Raven School').first()
     if not tenant:
         tenant = Tenant(name='Raven School')
         db.session.add(tenant)
         db.session.commit()
 
-    for email in SUPER_ADMIN_EMAILS:
-        if email and not User.query.filter_by(email=email).first():
-            hashed = hash_password('pass123')
-            super_admin = User(
-                email=email, name=f'Admin {email.split("@")[0]}',
-                password_hash=hashed, role='super_admin', tenant_id=tenant.id
+    # Create super admins from env only
+    admin_emails = [e.strip() for e in os.getenv('SUPER_ADMIN_EMAILS', '').split(',') if e.strip()]
+    default_pass = os.getenv('SUPER_ADMIN_PASSWORD', 'pass123')
+
+    for email in admin_emails:
+        if not User.query.filter_by(email=email).first():
+            user = User(
+                email=email,
+                name=email.split('@')[0].replace('admin', 'Admin ').title(),
+                password_hash=hash_password(default_pass),
+                role='super_admin',
+                tenant_id=tenant.id
             )
-            db.session.add(super_admin)
+            db.session.add(user)
 
     db.session.commit()
-    print("✅ Database initialized with super admins")
+
+# Run once on import (works for Render gunicorn)
+with app.app_context():
+    init_db()
 
 @app.route('/')
 def home():
     return jsonify({
         "message": "Raven Attendance API is running",
         "status": "online",
-        "endpoints": ["/api/auth/login", "/api/auth/verify"]
+        "version": "2.0"
     })
 
-# ============ RUN APP ============
+# ============ MAIN ============
 if __name__ == '__main__':
-    with app.app_context():
-        init_db()
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
