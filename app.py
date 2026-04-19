@@ -1,6 +1,6 @@
 import os
 import jwt
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, g
 from flask_cors import CORS
@@ -10,6 +10,7 @@ from flask_limiter.util import get_remote_address
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from dotenv import load_dotenv
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -31,7 +32,7 @@ class Tenant(db.Model):
     __tablename__ = 'tenants'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -41,14 +42,14 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), nullable=False)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Class(db.Model):
     __tablename__ = 'classes'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Student(db.Model):
     __tablename__ = 'students'
@@ -59,15 +60,15 @@ class Student(db.Model):
     term_registered = db.Column(db.String(20), nullable=False)
     status = db.Column(db.String(50), default='active')
     added_by = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    last_updated = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Subject(db.Model):
     __tablename__ = 'subjects'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Attendance(db.Model):
     __tablename__ = 'attendance'
@@ -80,7 +81,7 @@ class Attendance(db.Model):
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
     term = db.Column(db.String(20), nullable=False)
     taken_by = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class TeacherAssignment(db.Model):
     __tablename__ = 'teacher_assignments'
@@ -90,7 +91,7 @@ class TeacherAssignment(db.Model):
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
     assigned_by = db.Column(db.String(255))
-    assigned_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    assigned_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ============ HELPERS ============
 
@@ -109,7 +110,7 @@ def generate_token(user_id, tenant_id, role):
         'user_id': user_id,
         'tenant_id': tenant_id,
         'role': role,
-        'exp': datetime.now(timezone.utc) + timedelta(hours=int(os.getenv('JWT_EXPIRES_HOURS', 8)))
+        'exp': datetime.utcnow() + timedelta(hours=int(os.getenv('JWT_EXPIRES_HOURS', 8)))
     }
     return jwt.encode(payload, os.getenv('JWT_SECRET'), algorithm='HS256')
 
@@ -335,7 +336,7 @@ def register_student():
 
         if existing:
             existing.status = status
-            existing.last_updated = datetime.now(timezone.utc)
+            existing.last_updated = datetime.utcnow()
             db.session.commit()
             return jsonify({'message': 'Student updated', 'id': existing.id})
 
@@ -389,7 +390,7 @@ def update_student(student_id):
         if 'class_id' in data:
             student.class_id = data['class_id']
 
-        student.last_updated = datetime.now(timezone.utc)
+        student.last_updated = datetime.utcnow()
         db.session.commit()
         return jsonify({'message': 'Student updated'})
     except Exception as e:
@@ -617,6 +618,15 @@ with app.app_context():
     try:
         db.create_all()
         print("✅ Database tables created")
+
+        # Add missing columns automatically
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS class_id INTEGER"))
+                conn.commit()
+                print("✅ Added class_id column to students table")
+        except Exception as e:
+            print(f"⚠️ Column error: {e}")
 
         tenant = Tenant.query.filter_by(name='Raven School').first()
         if not tenant:
