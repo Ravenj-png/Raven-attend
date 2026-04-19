@@ -460,7 +460,6 @@ def get_assignments():
 
 @app.route('/api/attendance', methods=['POST'])
 @token_required
-@admin_only
 def save_attendance():
     try:
         data = request.get_json()
@@ -588,7 +587,6 @@ def attendance_summary():
 
 @app.route('/api/school/data', methods=['GET'])
 @token_required
-@admin_only
 def school_data():
     try:
         term = request.args.get('term', '')
@@ -628,7 +626,7 @@ with app.app_context():
             "added_by VARCHAR(255)",
             "last_updated TIMESTAMP"
         ]
-        
+
         with db.engine.connect() as conn:
             for column in columns_to_add:
                 try:
@@ -636,7 +634,7 @@ with app.app_context():
                     conn.commit()
                 except:
                     pass
-            
+
             try:
                 conn.execute(text("ALTER TABLE students RENAME COLUMN class TO class_id"))
                 conn.commit()
