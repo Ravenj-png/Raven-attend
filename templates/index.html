@@ -516,51 +516,47 @@
                     <div id="adminStats" class="stats-grid"></div>
                 </div>
 
-                <!-- Attendance -->
-                <div class="card">
-                    <h3>✅ Take Attendance</h3>
-                    <select id="attClass" class="input-field" onchange="loadSubjectsForClass()">
-                        <option value="">Select Class</option>
-                    </select>
-                    <select id="attSubject" class="input-field">
-                        <option value="">Select Subject</option>
-                    </select>
-                    <select id="attSession" class="input-field">
-                        <option value="morning">🌅 Morning Session</option>
-                        <option value="evening">🌙 Evening Session</option>
-                    </select>
-                    <input type="date" id="attDate" class="input-field">
-                    <button onclick="loadStudentsForAttendance()" class="btn-primary" style="width:100%;">Load Students</button>
-                    <div id="attendanceList" class="attendance-list"></div>
-                    <button onclick="saveAttendance()" class="btn-success" id="saveAttendanceBtn" style="display:none; width:100%;">💾 Save Attendance</button>
-                </div>
+              <!-- Attendance Card - ADD THIS ID -->
+<div class="card" id="attendanceSection">
+    <h3>✅ Take Attendance</h3>
+    <select id="attClass" class="input-field" onchange="loadSubjectsForClass()">
+        <option value="">Select Class</option>
+    </select>
+    <select id="attSubject" class="input-field">
+        <option value="">Select Subject</option>
+    </select>
+    <select id="attSession" class="input-field">
+        <option value="morning">🌅 Morning Session</option>
+        <option value="evening">🌙 Evening Session</option>
+    </select>
+    <input type="date" id="attDate" class="input-field">
+    <button onclick="loadStudentsForAttendance()" class="btn-primary">Load Students</button>
+    <div id="attendanceList" class="attendance-list"></div>
+    <button onclick="saveAttendance()" class="btn-success" id="saveAttendanceBtn" style="display:none">💾 Save Attendance</button>
+</div>
 
-                <!-- Reports -->
-                <div class="card">
-                    <h3>📈 Attendance Reports</h3>
-                    <select id="reportClass" class="input-field">
-                        <option value="">All Classes</option>
-                    </select>
-                    <select id="reportStudent" class="input-field">
-                        <option value="">All Students</option>
-                    </select>
-                    <select id="reportStatus" class="input-field">
-                        <option value="">All Statuses</option>
-                        <option value="present">Present</option>
-                        <option value="absent">Absent</option>
-                        <option value="sick">Sick</option>
-                        <option value="emergency">Emergency</option>
-                    </select>
-                    <input type="date" id="reportStart" class="input-field" placeholder="Start Date">
-                    <input type="date" id="reportEnd" class="input-field" placeholder="End Date">
-                    <button onclick="generateReport()" class="btn-primary" style="width:100%; margin-top:8px;">Generate Report</button>
-                    <button onclick="exportReport()" class="btn-secondary" style="width:100%;">📎 Export CSV</button>
-                    <div id="reportResult" class="report-result"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
+<!-- Reports Card - ADD THIS ID -->
+<div class="card" id="reportsSection">
+    <h3>📈 Attendance Reports</h3>
+    <select id="reportClass" class="input-field">
+        <option value="">All Classes</option>
+    </select>
+    <select id="reportStudent" class="input-field">
+        <option value="">All Students</option>
+    </select>
+    <select id="reportStatus" class="input-field">
+        <option value="">All Statuses</option>
+        <option value="present">Present</option>
+        <option value="absent">Absent</option>
+        <option value="sick">Sick</option>
+        <option value="emergency">Emergency</option>
+    </select>
+    <input type="date" id="reportStart" class="input-field" placeholder="Start Date">
+    <input type="date" id="reportEnd" class="input-field" placeholder="End Date">
+    <button onclick="generateReport()" class="btn-primary">Generate Report</button>
+    <button onclick="exportReport()" class="btn-secondary">📎 Export CSV</button>
+    <div id="reportResult" class="report-result"></div>
+</div>
     <!-- ==================== MODAL ==================== -->
     <div id="modal" class="modal" style="display:none">
         <div class="modal-content">
@@ -697,14 +693,13 @@ async function loadDashboard() {
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
-        // Show all admin buttons
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'inline-block');
         
     } else if (role === 'classteacher') {
-        // CLASS TEACHER: NO school overview, can register students
+        // CLASS TEACHER: Only attendance, reports, and register students
         if (adminControlsCard) adminControlsCard.style.display = 'none';
-        if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';  // HIDDEN
+        if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
@@ -712,12 +707,10 @@ async function loadDashboard() {
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'none');
         
-        // Only show Register Student button
+        // Show ONLY Register Student and Update Status buttons
         const registerBtn = document.querySelector('button[onclick="showRegisterStudentModal()"]');
-        if (registerBtn) registerBtn.style.display = 'inline-block';
-        
-        // Also show update student status button
         const updateBtn = document.querySelector('button[onclick="showUpdateStudentModal()"]');
+        if (registerBtn) registerBtn.style.display = 'inline-block';
         if (updateBtn) updateBtn.style.display = 'inline-block';
         
     } else {
@@ -732,7 +725,6 @@ async function loadDashboard() {
         allButtons.forEach(btn => btn.style.display = 'none');
     }
     
-    await loadAdminStats();
     await loadClassesDropdowns();
     await loadReportFilters();
     document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
