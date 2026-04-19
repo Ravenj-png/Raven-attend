@@ -756,13 +756,18 @@ async function loadAdminStats() {
         document.getElementById('adminStats').innerHTML = `<div class="stat-card">Error loading stats</div>`;
     }
 }
-
 async function loadClassesDropdowns() {
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/classes`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        if (!response.ok) {
+            console.log('Cannot load classes - permission denied');
+            return;
+        }
+        
         const classes = await response.json();
         
         let options = '<option value="">Select Class</option>';
@@ -774,7 +779,6 @@ async function loadClassesDropdowns() {
         console.error('Failed to load classes:', error);
     }
 }
-
 async function loadSubjectsForClass() {
     const classId = document.getElementById('attClass').value;
     if (!classId) { 
@@ -787,6 +791,13 @@ async function loadSubjectsForClass() {
         const response = await fetch(`${BACKEND_URL}/api/subjects`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        if (!response.ok) {
+            console.log('Cannot load subjects - permission denied');
+            document.getElementById('attSubject').innerHTML = '<option value="">Select Subject</option>';
+            return;
+        }
+        
         const subjects = await response.json();
         
         document.getElementById('attSubject').innerHTML = '<option value="">Select Subject</option>' + 
@@ -795,19 +806,26 @@ async function loadSubjectsForClass() {
         console.error('Failed to load subjects:', error);
     }
 }
-
 async function loadReportFilters() {
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/students?term=${currentTerm}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        
+        if (!response.ok) {
+            console.log('Cannot load students - permission denied');
+            document.getElementById('reportStudent').innerHTML = '<option value="">All Students</option>';
+            return;
+        }
+        
         const students = await response.json();
         
         document.getElementById('reportStudent').innerHTML = '<option value="">All Students</option>' + 
             (students || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
     } catch (error) {
         console.error('Failed to load students:', error);
+        document.getElementById('reportStudent').innerHTML = '<option value="">All Students</option>';
     }
 }
 	// ============ PART 5: ATTENDANCE FUNCTIONS ============
