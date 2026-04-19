@@ -667,7 +667,7 @@ function logout() {
     document.getElementById('loginEmail').value = '';
     document.getElementById('loginPassword').value = '';
 }		
-		// ============ PART 4: DASHBOARD FUNCTIONS ============
+// ============ PART 4: DASHBOARD FUNCTIONS ============
 async function loadDashboard() {
     document.getElementById('userNameDisplay').innerHTML = `👋 ${currentUser.name}`;
     document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : currentUser.role === 'classteacher' ? 'CLASS TEACHER' : 'TEACHER';
@@ -700,19 +700,24 @@ async function loadDashboard() {
         allButtons.forEach(btn => btn.style.display = 'inline-block');
 
     } else if (role === 'classteacher') {
-        // CLASS TEACHER: Only attendance, reports, and register students
-        if (adminControlsCard) adminControlsCard.style.display = 'none';
+        // CLASS TEACHER: Can register students, update status, take attendance, view reports
+        // Keep admin card visible but modify it
+        if (adminControlsCard) adminControlsCard.style.display = 'block';
         if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
-        // Show the flex-buttons container
+        // Change the title of the card
+        const cardTitle = adminControlsCard.querySelector('h3');
+        if (cardTitle) cardTitle.innerText = '📝 Class Teacher Actions';
+        
+        // Show flex buttons container
         if (flexButtons) flexButtons.style.display = 'flex';
         
         // Hide all buttons first
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'none');
-
+        
         // Show ONLY Register Student and Update Status buttons
         const registerBtn = document.querySelector('button[onclick="showRegisterStudentModal()"]');
         const updateBtn = document.querySelector('button[onclick="showUpdateStudentModal()"]');
@@ -720,18 +725,14 @@ async function loadDashboard() {
         if (updateBtn) updateBtn.style.display = 'inline-block';
 
     } else {
-        // TEACHER: Only attendance and reports
+        // TEACHER: Only take attendance and view reports - CANNOT register students
         if (adminControlsCard) adminControlsCard.style.display = 'none';
         if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
-        // Show the flex-buttons container (will be empty but visible)
-        if (flexButtons) flexButtons.style.display = 'flex';
-        
-        // Hide all buttons
-        const allButtons = document.querySelectorAll('.flex-buttons button');
-        allButtons.forEach(btn => btn.style.display = 'none');
+        // Hide flex buttons container completely
+        if (flexButtons) flexButtons.style.display = 'none';
     }
 
     await loadClassesDropdowns();
