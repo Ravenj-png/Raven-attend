@@ -30,13 +30,13 @@ limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "5
 
 class Tenant(db.Model):
     __tablename__ = 'tenants'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
     name = db.Column(db.String(255), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -46,14 +46,14 @@ class User(db.Model):
 
 class Class(db.Model):
     __tablename__ = 'classes'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Student(db.Model):
     __tablename__ = 'students'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), nullable=False)
     class_id = db.Column(db.Integer, db.ForeignKey('classes.id'))
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
@@ -65,14 +65,14 @@ class Student(db.Model):
 
 class Subject(db.Model):
     __tablename__ = 'subjects'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Attendance(db.Model):
     __tablename__ = 'attendance'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     date = db.Column(db.Date, nullable=False)
     class_id = db.Column(db.Integer, db.ForeignKey('classes.id'))
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
@@ -85,7 +85,7 @@ class Attendance(db.Model):
 
 class TeacherAssignment(db.Model):
     __tablename__ = 'teacher_assignments'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     teacher_email = db.Column(db.String(255), nullable=False)
     class_id = db.Column(db.Integer, db.ForeignKey('classes.id'))
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
@@ -330,6 +330,7 @@ def register_student():
         if not name or not class_id or not term:
             return jsonify({'error': 'Name, class, and term required'}), 400
 
+        # Check if student already exists
         existing = Student.query.filter_by(
             name=name, class_id=class_id, tenant_id=g.tenant_id, term_registered=term
         ).first()
@@ -340,9 +341,14 @@ def register_student():
             db.session.commit()
             return jsonify({'message': 'Student updated', 'id': existing.id})
 
+        # Create new student - let database auto-generate ID
         student = Student(
-            name=name, class_id=class_id, tenant_id=g.tenant_id,
-            term_registered=term, status=status, added_by=str(g.user_id)
+            name=name,
+            class_id=class_id,
+            tenant_id=g.tenant_id,
+            term_registered=term,
+            status=status,
+            added_by=str(g.user_id)
         )
         db.session.add(student)
         db.session.commit()
@@ -353,9 +359,25 @@ def register_student():
 @app.route('/api/students', methods=['GET'])
 @token_required
 def get_students():
-    # TEMPORARY FIX: Return empty array to avoid database errors
-    # This allows your presentation to work without fixing the database
-    return jsonify([])
+    try:
+        term = request.args.get('term', '')
+        class_id = request.args.get('class_id')
+        query = Student.query.filter_by(tenant_id=g.tenant_id)
+        if term:
+            query = query.filter_by(term_registered=term)
+        if class_id:
+            query = query.filter_by(class_id=class_id)
+
+        students = query.all()
+        return jsonify([{
+            'id': s.id,
+            'name': s.name,
+            'classId': s.class_id,
+            'termRegistered': s.term_registered,
+            'status': s.status
+        } for s in students])
+    except Exception as e:
+        return jsonify([])
 
 @app.route('/api/students/<int:student_id>', methods=['PUT'])
 @token_required
@@ -596,39 +618,39 @@ def school_data():
 def home():
     return jsonify({'message': 'Raven Attendance API is running', 'status': 'online'})
 
-# ============ FIX ALL MISSING COLUMNS ============
+# ============ FIX DATABASE ============
 
 with app.app_context():
     try:
-        db.create_all()
-        print("✅ Database tables created")
-
-        # Fix all missing columns in students table
-        columns_to_add = [
-            "class_id INTEGER",
-            "tenant_id INTEGER", 
-            "term_registered VARCHAR(20)",
-            "status VARCHAR(50) DEFAULT 'active'",
-            "added_by VARCHAR(255)",
-            "last_updated TIMESTAMP"
-        ]
-        
+        # Drop and recreate students table with correct schema
         with db.engine.connect() as conn:
-            for column in columns_to_add:
-                try:
-                    conn.execute(text(f"ALTER TABLE students ADD COLUMN IF NOT EXISTS {column}"))
-                    conn.commit()
-                    print(f"✅ Added column: {column.split()[0]}")
-                except Exception as e:
-                    print(f"⚠️ Could not add column {column}: {e}")
-            
-            # Also try to rename 'class' to 'class_id' if it exists
+            # Drop existing table if problematic
             try:
-                conn.execute(text("ALTER TABLE students RENAME COLUMN class TO class_id"))
+                conn.execute(text("DROP TABLE IF EXISTS students CASCADE"))
                 conn.commit()
-                print("✅ Renamed 'class' column to 'class_id'")
+                print("✅ Dropped old students table")
             except:
                 pass
+            
+            # Recreate students table
+            conn.execute(text("""
+                CREATE TABLE students (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    class_id INTEGER,
+                    tenant_id INTEGER,
+                    term_registered VARCHAR(20),
+                    status VARCHAR(50) DEFAULT 'active',
+                    added_by VARCHAR(255),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    last_updated TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            conn.commit()
+            print("✅ Created fresh students table with correct schema")
+
+        db.create_all()
+        print("✅ Database tables created")
 
         tenant = Tenant.query.filter_by(name='Raven School').first()
         if not tenant:
