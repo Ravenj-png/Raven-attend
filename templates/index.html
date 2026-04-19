@@ -1298,7 +1298,6 @@ async function assignSubjectToTeacher() {
     }
 }
 // ============ PART 8: REPORTS & PWA FUNCTIONS ==========
-
 async function viewAllData() {
     try {
         const token = localStorage.getItem('raven_token');
@@ -1306,14 +1305,20 @@ async function viewAllData() {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         let html = `
-            <h4>👥 Teachers (${data.teachers.length})</h4>
-            <ul style="list-style:none; padding:0;">${data.teachers.map(t => `<li class="list-item">${t.name} (${t.email}) - ${t.role}</li>`).join('') || '<li>No teachers</li>'}</ul>
-            <h4>🎓 Active Students (${data.students.filter(s => s.status === 'active').length})</h4>
-            <ul style="list-style:none; padding:0;">${data.students.filter(s => s.status === 'active').slice(0,20).map(s => `<li class="list-item">${s.name}</li>`).join('') || '<li>No active students</li>'}</ul>
-            <h4>📚 Subjects (${data.subjects.length})</h4>
-            <ul style="list-style:none; padding:0;">${data.subjects.map(s => `<li class="list-item">${s.name}</li>`).join('')}</ul>
+            <h4>👥 Teachers</h4>
+            <ul style="list-style:none; padding:0;">
+                ${data.teachers.map(t => `<li class="list-item">${t.name} (${t.email}) - ${t.role} <button onclick="deleteTeacher(${t.id})" class="btn-danger" style="padding:4px 12px; margin-left:10px;">Delete</button></li>`).join('') || '<li>No teachers</li>'}
+            </ul>
+            <h4>🏫 Classes</h4>
+            <ul style="list-style:none; padding:0;">
+                ${data.classes.map(c => `<li class="list-item">${c.name} <button onclick="deleteClass(${c.id})" class="btn-danger" style="padding:4px 12px; margin-left:10px;">Delete</button></li>`).join('') || '<li>No classes</li>'}
+            </ul>
+            <h4>📚 Subjects</h4>
+            <ul style="list-style:none; padding:0;">
+                ${data.subjects.map(s => `<li class="list-item">${s.name} <button onclick="deleteSubject(${s.id})" class="btn-danger" style="padding:4px 12px; margin-left:10px;">Delete</button></li>`).join('') || '<li>No subjects</li>'}
+            </ul>
         `;
         document.getElementById('modalTitle').innerText = '📊 All School Data';
         document.getElementById('modalBody').innerHTML = html;
@@ -1323,6 +1328,121 @@ async function viewAllData() {
     }
 }
 
+// Delete functions
+async function deleteTeacher(teacherId) {
+    if (!confirm('Delete this teacher?')) return;
+    try {
+        const token = localStorage.getItem('raven_token');
+        const response = await fetch(`${BACKEND_URL}/api/users/teachers/${teacherId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            alert('Teacher deleted');
+            viewAllData();
+            loadAdminStats();
+        } else {
+            alert('Delete failed');
+        }
+    } catch (error) {
+        alert('Connection error');
+    }
+}
+
+async function deleteClass(classId) {
+    if (!confirm('Delete this class? This will also delete students in this class.')) return;
+    try {
+        const token = localStorage.getItem('raven_token');
+        const response = await fetch(`${BACKEND_URL}/api/classes/${classId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            alert('Class deleted');
+            viewAllData();
+            loadClassesDropdowns();
+            loadAdminStats();
+        } else {
+            alert('Delete failed');
+        }
+    } catch (error) {
+        alert('Connection error');
+    }
+}
+
+async function deleteSubject(subjectId) {
+    if (!confirm('Delete this subject?')) return;
+    try {
+        const token = localStorage.getItem('raven_token');
+        const response = await fetch(`${BACKEND_URL}/api/subjects/${subjectId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            alert('Subject deleted');
+            viewAllData();
+            loadAdminStats();
+        } else {
+            alert('Delete failed');
+        }
+    } catch (error) {
+        alert('Connection error');
+    }
+}
+async function generateReport() {
+    const classId = document.getElementById('reportClass').value;
+    const studentId = document.getElementById('reportStudent').value;
+    const statusFilter = document.getElementById('reportStatus').value;
+    const startDate = document.getElementById('reportStart').value;
+    const endDate = document.getElementById('reportEnd').value;
+    
+    try {
+        const token = localStorage.getItem('raven_token');
+        let url = `${BACKEND_URL}/api/reports/attendance-summary?term=${currentTerm}`;
+        if (classId) url += `&class_id=${classId}`;
+        if (startDate) url += `&start_date=${startDate}`;
+        if (endDate) url += `&end_date=${endDate}`;
+        
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        const stats = await response.json();
+        
+        if (stats.length === 0) {
+            document.getElementById('reportResult').innerHTML = '<div class="card">📭 No attendance data</div>';
+            return;
+        }
+        
+        let filtered = stats;
+        if (studentId) filtered = filtered.filter(s => s.studentId == studentId);
+        if (statusFilter) filtered = filtered.filter(s => s[statusFilter] > 0);
+        
+        let html = `<table><thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Sick</th><th>Emergency</th><th>Total</th><th>Rate</th></tr></thead><tbody>`;
+        filtered.forEach(s => {
+            html += `<tr><td style="font-weight:600;">${s.studentName}</td>
+                     <td style="color:#059669">${s.present}</td>
+                     <td style="color:#dc2626">${s.absent}</td>
+                     <td style="color:#f59e0b">${s.sick || 0}</td>
+                     <td style="color:#7c3aed">${s.emergency || 0}</td>
+                     <td><strong>${s.total}</strong></td>
+                     <td><strong>${s.attendanceRate}%</strong></td>
+                </tr>`;
+        });
+        html += `</tbody></table>`;
+        document.getElementById('reportResult').innerHTML = html;
+    } catch (error) {
+        document.getElementById('reportResult').innerHTML = '<div class="card">Error loading report</div>';
+    }
+}
+
+function exportReport() {
+    const reportText = document.getElementById('reportResult').innerText;
+    if(!reportText || reportText.includes('No attendance')) { alert('Generate a report first'); return; }
+    const blob = new Blob([reportText], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `raven_attendance_${currentTerm}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
 async function viewReports() {
     try {
         const token = localStorage.getItem('raven_token');
