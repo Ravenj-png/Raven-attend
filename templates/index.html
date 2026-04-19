@@ -1229,8 +1229,8 @@ async function assignSubjectToTeacher() {
         alert('Connection error');
     }
 }
+// ============ PART 8: REPORTS & PWA FUNCTIONS ==========
 
-// ============ PART 8: REPORTS & PWA FUNCTIONS ============
 async function viewAllData() {
     try {
         const token = localStorage.getItem('raven_token');
@@ -1282,54 +1282,6 @@ async function viewReports() {
     } catch (error) {
         alert('Failed to load reports');
     }
-}
-
-async function generateReport() {
-    const classId = document.getElementById('reportClass').value;
-    const studentId = document.getElementById('reportStudent').value;
-    const statusFilter = document.getElementById('reportStatus').value;
-    const startDate = document.getElementById('reportStart').value;
-    const endDate = document.getElementById('reportEnd').value;
-    
-    try {
-        const token = localStorage.getItem('raven_token');
-        let url = `${BACKEND_URL}/api/reports/attendance-summary?term=${currentTerm}`;
-        if (classId) url += `&class_id=${classId}`;
-        if (startDate) url += `&start_date=${startDate}`;
-        if (endDate) url += `&end_date=${endDate}`;
-        
-        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        const stats = await response.json();
-        
-        if (stats.length === 0) {
-            document.getElementById('reportResult').innerHTML = '<div class="card">📭 No attendance data</div>';
-            return;
-        }
-        
-        let filtered = stats;
-        if (studentId) filtered = filtered.filter(s => s.studentId == studentId);
-        if (statusFilter) filtered = filtered.filter(s => s[statusFilter] > 0);
-        
-        let html = `<table><thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Total</th><th>Rate</th></tr></thead><tbody>`;
-        filtered.forEach(s => {
-            html += `<tr><td style="font-weight:600;">${s.studentName}</td><td style="color:#059669">${s.present}</td><td style="color:#dc2626">${s.absent}</td><td><strong>${s.total}</strong></td><td><strong>${s.attendanceRate}%</strong></td></tr>`;
-        });
-        html += `</tbody></table>`;
-        document.getElementById('reportResult').innerHTML = html;
-    } catch (error) {
-        document.getElementById('reportResult').innerHTML = '<div class="card">Error loading report</div>';
-    }
-}
-
-function exportReport() {
-    const reportText = document.getElementById('reportResult').innerText;
-    if(!reportText || reportText.includes('No attendance')) { alert('Generate a report first'); return; }
-    const blob = new Blob([reportText], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `raven_attendance_${currentTerm}_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
 }
 
 function showChangePasswordModal() {
@@ -1427,11 +1379,12 @@ window.addEventListener('offline', () => {
     status.style.display = 'block';
 });
 
-// Make sure changeTerm is defined for the HTML select
+// Initialize
 document.getElementById('currentTerm').addEventListener('change', changeTerm);
 updateTermDisplay();
 console.log('✅ Raven Attendance System Ready');
-			
+
+
 			
 	</script>
 </body>
