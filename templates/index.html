@@ -477,17 +477,18 @@
 
         <!-- ==================== DASHBOARD SCREEN ==================== -->
         <div id="dashboardScreen" style="display:none">
-            <div class="dashboard-header">
-                <div>
-                    <h2 id="userNameDisplay" style="font-size: 1.3rem;"></h2>
-                    <div id="tenantDisplay" class="badge-tenant" style="margin-top:6px; display:none;"></div>
-                    <div id="termDisplay" class="badge-term" style="margin-top:6px;"></div>
-                </div>
-                <div style="text-align:right">
-                    <span id="userRoleBadge" class="badge"></span>
-                    <button onclick="logout()" class="btn-logout" style="margin-top:8px; display:block">🚪 Logout</button>
-                </div>
-            </div>
+           <div class="dashboard-header">
+    <div>
+        <h2 id="userNameDisplay" style="font-size: 1.3rem;"></h2>
+        <div id="tenantDisplay" class="badge-tenant" style="margin-top:6px; display:none;"></div>
+        <div id="termDisplay" class="badge-term" style="margin-top:6px;"></div>
+    </div>
+    <div style="text-align:right">
+        <span id="userRoleBadge" class="badge"></span>
+        <button onclick="showChangePasswordModal()" class="btn-secondary" style="margin-top:8px; margin-right:8px;">🔒 Change Password</button>
+        <button onclick="logout()" class="btn-logout" style="margin-top:8px;">🚪 Logout</button>
+    </div>
+</div>
 
             <div class="term-notice">
                 📚 Current Term: <span id="currentTermDisplay"></span> | Students must re-register each term
