@@ -478,7 +478,6 @@ def attendance_summary():
     stats = {}
 
     for record in attendance_records:
-        # Handle list format: [{"studentId": 1, "status": "present"}, ...]
         if isinstance(record.records, list):
             for rec in record.records:
                 sid = str(rec.get('studentId'))
@@ -488,7 +487,6 @@ def attendance_summary():
                         stats[sid] = {'present': 0, 'absent': 0, 'sick': 0, 'emergency': 0, 'total': 0}
                     stats[sid][status] = stats[sid].get(status, 0) + 1
                     stats[sid]['total'] += 1
-        # Handle legacy dict format: {"1": "present", ...}
         elif isinstance(record.records, dict):
             for sid, status in record.records.items():
                 if sid not in stats:
@@ -535,38 +533,7 @@ def school_data():
         'subjects': [{'id': s.id, 'name': s.name} for s in subjects]
     })
 
-# ============ INITIALIZATION ============
-
-def init_db():
-    db.create_all()
-
-    # Create default tenant
-    tenant = Tenant.query.filter_by(name='Raven School').first()
-    if not tenant:
-        tenant = Tenant(name='Raven School')
-        db.session.add(tenant)
-        db.session.commit()
-
-    # Create super admins from env only
-    admin_emails = [e.strip() for e in os.getenv('SUPER_ADMIN_EMAILS', '').split(',') if e.strip()]
-    default_pass = os.getenv('SUPER_ADMIN_PASSWORD', 'pass123')
-
-    for email in admin_emails:
-        if not User.query.filter_by(email=email).first():
-            user = User(
-                email=email,
-                name=email.split('@')[0].replace('admin', 'Admin ').title(),
-                password_hash=hash_password(default_pass),
-                role='super_admin',
-                tenant_id=tenant.id
-            )
-            db.session.add(user)
-
-    db.session.commit()
-
-# Run once on import (works for Render gunicorn)
-with app.app_context():
-    init_db()
+# ============ HOME ============
 
 @app.route('/')
 def home():
@@ -575,6 +542,39 @@ def home():
         "status": "online",
         "version": "2.0"
     })
+
+# ============ AUTO-CREATE TABLES ON STARTUP ============
+# THIS IS THE FIX - IT CREATES ALL TABLES AUTOMATICALLY
+with app.app_context():
+    try:
+        db.create_all()
+        print("✅ Database tables created/verified successfully")
+
+        # Create default tenant if not exists
+        tenant = Tenant.query.filter_by(name='Raven School').first()
+        if not tenant:
+            tenant = Tenant(name='Raven School')
+            db.session.add(tenant)
+            db.session.commit()
+            print("✅ Default tenant created")
+
+        # Create super admins
+        admin_emails = os.getenv('SUPER_ADMIN_EMAILS', 'admin1@school.com,admin2@school.com,admin3@school.com').split(',')
+        for email in admin_emails:
+            email = email.strip()
+            if email and not User.query.filter_by(email=email).first():
+                user = User(
+                    email=email,
+                    name=email.split('@')[0].replace('admin', 'Admin ').title(),
+                    password_hash=hash_password('pass123'),
+                    role='super_admin',
+                    tenant_id=tenant.id if tenant else 1
+                )
+                db.session.add(user)
+        db.session.commit()
+        print("✅ Super admins created/verified")
+    except Exception as e:
+        print(f"⚠️ Initialization error: {e}")
 
 # ============ MAIN ============
 if __name__ == '__main__':
