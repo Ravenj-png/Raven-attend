@@ -256,7 +256,7 @@ def get_teachers():
     except Exception as e:
         return jsonify([])
 
-# ============ CLASSES (Teachers can view) ============
+# ============ CLASSES ============
 
 @app.route('/api/classes', methods=['POST'])
 @token_required
@@ -284,7 +284,7 @@ def get_classes():
     except Exception as e:
         return jsonify([])
 
-# ============ SUBJECTS (Teachers can view) ============
+# ============ SUBJECTS ============
 
 @app.route('/api/subjects', methods=['POST'])
 @token_required
@@ -612,14 +612,14 @@ def school_data():
 def home():
     return jsonify({'message': 'Raven Attendance API is running', 'status': 'online'})
 
-# ============ FIX MISSING COLUMNS ============
+# ============ INITIALIZATION ============
 
 with app.app_context():
     try:
         db.create_all()
         print("✅ Database tables created")
 
-        # Fix all missing columns in students table
+        # Fix missing columns
         columns_to_add = [
             "class_id INTEGER",
             "tenant_id INTEGER", 
@@ -634,15 +634,12 @@ with app.app_context():
                 try:
                     conn.execute(text(f"ALTER TABLE students ADD COLUMN IF NOT EXISTS {column}"))
                     conn.commit()
-                    print(f"✅ Added column: {column.split()[0]}")
-                except Exception as e:
-                    print(f"⚠️ Could not add column {column}: {e}")
+                except:
+                    pass
             
-            # Also try to rename 'class' to 'class_id' if it exists
             try:
                 conn.execute(text("ALTER TABLE students RENAME COLUMN class TO class_id"))
                 conn.commit()
-                print("✅ Renamed 'class' column to 'class_id'")
             except:
                 pass
 
@@ -651,7 +648,6 @@ with app.app_context():
             tenant = Tenant(name='Raven School')
             db.session.add(tenant)
             db.session.commit()
-            print("✅ Default tenant created")
 
         admin_emails = os.getenv('SUPER_ADMIN_EMAILS', 'admin1@school.com,admin2@school.com,admin3@school.com').split(',')
         for email in admin_emails:
@@ -666,7 +662,7 @@ with app.app_context():
                 )
                 db.session.add(user)
         db.session.commit()
-        print("✅ Super admins created")
+        print("✅ Database initialized")
     except Exception as e:
         print(f"⚠️ Init error: {e}")
 
