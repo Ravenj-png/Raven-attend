@@ -318,7 +318,6 @@ def get_subjects():
 
 @app.route('/api/students', methods=['POST'])
 @token_required
-@admin_only
 def register_student():
     try:
         data = request.get_json()
@@ -620,7 +619,7 @@ with app.app_context():
         # Fix missing columns
         columns_to_add = [
             "class_id INTEGER",
-            "tenant_id INTEGER", 
+            "tenant_id INTEGER",
             "term_registered VARCHAR(20)",
             "status VARCHAR(50) DEFAULT 'active'",
             "added_by VARCHAR(255)",
