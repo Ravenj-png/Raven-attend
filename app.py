@@ -13,10 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ============ APP CONFIGURATION ============
 app = Flask(__name__)
-
-# CORS - Allow all origins for now
 CORS(app, origins='*')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
@@ -26,12 +23,7 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 db = SQLAlchemy(app)
 ph = PasswordHasher()
 
-# Rate Limiter
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"]
-)
+limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 
 # ============ DATABASE MODELS ============
 
@@ -50,7 +42,6 @@ class User(db.Model):
     role = db.Column(db.String(50), nullable=False)
     tenant_id = db.Column(db.Integer, db.ForeignKey('tenants.id'))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    requires_password_change = db.Column(db.Boolean, default=True)
 
 class Class(db.Model):
     __tablename__ = 'classes'
@@ -152,7 +143,7 @@ def admin_only(f):
 
 @app.errorhandler(500)
 def handle_500(e):
-    return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
+    return jsonify({'error': 'Internal server error'}), 500
 
 @app.errorhandler(404)
 def handle_404(e):
@@ -185,8 +176,7 @@ def login():
                 'name': user.name,
                 'email': user.email,
                 'role': user.role,
-                'tenant_id': user.tenant_id,
-                'requires_password_change': user.requires_password_change
+                'tenant_id': user.tenant_id
             },
             'tenant': {
                 'id': tenant.id if tenant else None,
@@ -200,8 +190,6 @@ def login():
 @token_required
 def verify_token():
     return jsonify({'valid': True, 'role': g.role, 'tenant_id': g.tenant_id})
-
-# ============ CHANGE PASSWORD ============
 
 @app.route('/api/auth/change-password', methods=['POST'])
 @token_required
@@ -222,7 +210,6 @@ def change_password():
             return jsonify({'error': 'Current password is incorrect'}), 401
 
         user.password_hash = hash_password(new_password)
-        user.requires_password_change = False
         db.session.commit()
 
         return jsonify({'message': 'Password changed successfully'})
@@ -250,8 +237,7 @@ def add_teacher():
         user = User(
             email=email, name=name,
             password_hash=hash_password(password),
-            role=role, tenant_id=g.tenant_id,
-            requires_password_change=True
+            role=role, tenant_id=g.tenant_id
         )
         db.session.add(user)
         db.session.commit()
@@ -597,7 +583,7 @@ def attendance_summary():
     except Exception as e:
         return jsonify([])
 
-# ============ SCHOOL DATA (VIEW ALL) ============
+# ============ SCHOOL DATA ============
 
 @app.route('/api/school/data', methods=['GET'])
 @token_required
@@ -619,41 +605,18 @@ def school_data():
     except Exception as e:
         return jsonify({'teachers': [], 'students': [], 'classes': [], 'subjects': []})
 
-# ============ TERMS ============
-
-@app.route('/api/terms', methods=['GET'])
-@token_required
-def get_terms():
-    try:
-        current_year = datetime.now(timezone.utc).year
-        terms = []
-        for year in [current_year - 1, current_year, current_year + 1]:
-            for term_num in range(1, 4):
-                terms.append({
-                    'id': f'term{term_num}-{year}',
-                    'name': f'Term {term_num} - {year}',
-                    'year': year,
-                    'term': term_num
-                })
-        return jsonify(terms)
-    except Exception as e:
-        return jsonify([])
-
 # ============ HOME ============
 
 @app.route('/')
 def home():
-    return jsonify({
-        "message": "Raven Attendance API is running",
-        "status": "online",
-        "version": "2.0"
-    })
+    return jsonify({'message': 'Raven Attendance API is running', 'status': 'online'})
 
-# ============ AUTO-CREATE TABLES ON STARTUP ============
+# ============ INITIALIZATION ============
+
 with app.app_context():
     try:
         db.create_all()
-        print("✅ Database tables created/verified successfully")
+        print("✅ Database tables created")
 
         tenant = Tenant.query.filter_by(name='Raven School').first()
         if not tenant:
@@ -671,16 +634,14 @@ with app.app_context():
                     name=email.split('@')[0].replace('admin', 'Admin ').title(),
                     password_hash=hash_password('pass123'),
                     role='super_admin',
-                    tenant_id=tenant.id,
-                    requires_password_change=False
+                    tenant_id=tenant.id
                 )
                 db.session.add(user)
         db.session.commit()
-        print("✅ Super admins created/verified")
+        print("✅ Super admins created")
     except Exception as e:
-        print(f"⚠️ Initialization error: {e}")
+        print(f"⚠️ Init error: {e}")
 
-# ============ MAIN ============
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
