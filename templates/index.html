@@ -673,7 +673,7 @@ function logout() {
 		// ============ PART 4: DASHBOARD FUNCTIONS ============
 async function loadDashboard() {
     document.getElementById('userNameDisplay').innerHTML = `👋 ${currentUser.name}`;
-    document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : 'ADMIN';
+    document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : currentUser.role === 'classteacher' ? 'CLASS TEACHER' : 'TEACHER';
     
     if (currentTenant) {
         document.getElementById('tenantDisplay').style.display = 'inline-block';
@@ -681,13 +681,71 @@ async function loadDashboard() {
     }
     
     updateTermDisplay();
+    
+    const role = currentUser.role;
+    
+    // Get all cards
+    const adminControlsCard = document.querySelector('#adminPanel .card:first-child');
+    const schoolOverviewCard = document.querySelector('#adminPanel .card:nth-child(2)');
+    const attendanceCard = document.getElementById('attendanceSection');
+    const reportsCard = document.getElementById('reportsSection');
+    
+    if (role === 'super_admin' || role === 'admin') {
+        // ADMIN: Show everything
+        if (adminControlsCard) adminControlsCard.style.display = 'block';
+        if (schoolOverviewCard) schoolOverviewCard.style.display = 'block';
+        if (attendanceCard) attendanceCard.style.display = 'block';
+        if (reportsCard) reportsCard.style.display = 'block';
+        
+        // Show all admin buttons
+        const allButtons = document.querySelectorAll('.flex-buttons button');
+        allButtons.forEach(btn => btn.style.display = 'inline-block');
+        
+    } else if (role === 'classteacher') {
+        // CLASS TEACHER: NO school overview, can register students
+        if (adminControlsCard) adminControlsCard.style.display = 'none';
+        if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';  // HIDDEN
+        if (attendanceCard) attendanceCard.style.display = 'block';
+        if (reportsCard) reportsCard.style.display = 'block';
+        
+        // Hide all buttons first
+        const allButtons = document.querySelectorAll('.flex-buttons button');
+        allButtons.forEach(btn => btn.style.display = 'none');
+        
+        // Only show Register Student button
+        const registerBtn = document.querySelector('button[onclick="showRegisterStudentModal()"]');
+        if (registerBtn) registerBtn.style.display = 'inline-block';
+        
+        // Also show update student status button
+        const updateBtn = document.querySelector('button[onclick="showUpdateStudentModal()"]');
+        if (updateBtn) updateBtn.style.display = 'inline-block';
+        
+    } else {
+        // TEACHER: Only attendance and reports
+        if (adminControlsCard) adminControlsCard.style.display = 'none';
+        if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';
+        if (attendanceCard) attendanceCard.style.display = 'block';
+        if (reportsCard) reportsCard.style.display = 'block';
+        
+        // Hide all buttons
+        const allButtons = document.querySelectorAll('.flex-buttons button');
+        allButtons.forEach(btn => btn.style.display = 'none');
+    }
+    
     await loadAdminStats();
     await loadClassesDropdowns();
     await loadReportFilters();
     document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
 }
-
 async function loadAdminStats() {
+    const role = currentUser.role;
+    
+    // Only show stats for admin
+    if (role !== 'super_admin' && role !== 'admin') {
+        document.getElementById('adminStats').innerHTML = '';
+        return;
+    }
+    
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/school/data?term=${currentTerm}`, {
