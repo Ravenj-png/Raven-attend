@@ -578,743 +578,736 @@
     </div>
 
     <script>
-        // ==================== CONFIGURATION ====================
-        const BACKEND_URL = 'https://raven-attendance.onrender.com';
-
-        // ==================== STATE ====================
-        let currentUser = null;
-        let currentTenant = null;
-        let currentTerm = 'term1-2026';
-        let currentAttendanceMeta = null;
-        let attendanceRecordsMap = {};
-
-        // ==================== API CLIENT ====================
-        async function apiCall(endpoint, method = 'GET', body = null) {
-            const token = localStorage.getItem('raven_token');
-            const options = {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
-                }
-            };
-            if (body) options.body = JSON.stringify(body);
-
-            const response = await fetch(`${BACKEND_URL}/api/${endpoint}`, options);
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || `HTTP ${response.status}`);
-            }
-            return data;
-        }
-
-        // ==================== AUTHENTICATION ====================
-        async function login() {
-            const email = document.getElementById('loginEmail').value.trim();
-            const password = document.getElementById('loginPassword').value;
-            const errorDiv = document.getElementById('loginError');
-
-            if (!email || !password) {
-                errorDiv.innerText = 'Enter email & password';
-                return;
-            }
-
-            try {
-                const data = await apiCall('auth/login', 'POST', { email, password });
-                
-                localStorage.setItem('raven_token', data.token);
-                
-                // Normalize backend snake_case to JS camelCase
-                currentUser = {
-                    id: data.user.id,
-                    name: data.user.name,
-                    email: data.user.email,
-                    role: data.user.role,
-                    tenantId: data.user.tenant_id
-                };
-                
-                currentTenant = data.tenant || { id: currentUser.tenantId, name: 'Raven School' };
-                currentTerm = document.getElementById('currentTerm').value;
-
-                document.getElementById('authScreen').style.display = 'none';
-                document.getElementById('dashboardScreen').style.display = 'block';
-                
-                loadDashboard();
-                errorDiv.innerText = '';
-            } catch (err) {
-                errorDiv.innerText = err.message || 'Login failed. Check credentials.';
-                console.error(err);
-            }
-        }
-
-        function logout() {
-            currentUser = null;
-            currentTenant = null;
-            localStorage.removeItem('raven_token');
-            document.getElementById('dashboardScreen').style.display = 'none';
-            document.getElementById('authScreen').style.display = 'block';
-            document.getElementById('loginEmail').value = '';
-            document.getElementById('loginPassword').value = '';
-        }
-
-        async function restoreSession() {
-            const token = localStorage.getItem('raven_token');
-            if (!token) return;
-
-            try {
-                const data = await apiCall('auth/verify');
-                // We need user info but verify only returns role/tenant_id
-                // For full restore, we'd need a /api/me endpoint, but for now we decode basic info
-                // This is a simplified restore - in production add GET /api/users/me
-                currentUser = {
-                    role: data.role,
-                    tenantId: data.tenant_id
-                };
-                currentTerm = document.getElementById('currentTerm').value;
-                
-                document.getElementById('authScreen').style.display = 'none';
-                document.getElementById('dashboardScreen').style.display = 'block';
-                loadDashboard();
-            } catch (err) {
-                console.log('Session expired');
-                logout();
-            }
-        }
-
-        // ==================== DASHBOARD ====================
-        function loadDashboard() {
-            document.getElementById('userNameDisplay').innerHTML = `👋 ${currentUser.name || 'Admin'}`;
-            document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : 'ADMIN';
-
-            if (currentTenant) {
-                document.getElementById('tenantDisplay').style.display = 'inline-block';
-                document.getElementById('tenantDisplay').innerText = `🏫 ${currentTenant.name}`;
-            }
-
-            updateTermDisplay();
-            loadAdminStats();
-            loadClassesDropdowns();
-            loadReportFilters();
-            document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
-        }
-
-        function updateTermDisplay() {
-            const termSelect = document.getElementById('currentTerm');
-            const termText = termSelect.options[termSelect.selectedIndex].text;
-            document.getElementById('currentTermDisplay').innerText = termText;
-            if (document.getElementById('termDisplay')) {
-                document.getElementById('termDisplay').innerText = `📅 ${termText}`;
-            }
-        }
-
-        async function loadAdminStats() {
-            try {
-                const [teachers, students, classes, subjects] = await Promise.all([
-                    apiCall('users/teachers'),
-                    apiCall(`students?term=${currentTerm}`),
-                    apiCall('classes'),
-                    apiCall('subjects')
-                ]);
-
-                const activeStudents = students.filter(s => s.status === 'active').length;
-                const inactiveStudents = students.filter(s => s.status !== 'active').length;
-
-                document.getElementById('adminStats').innerHTML = `
-                    <div class="stat-card"><div class="stat-number">${teachers.length}</div><div>Teachers</div></div>
-                    <div class="stat-card" style="background:#d1fae5;"><div class="stat-number" style="color:#059669">${activeStudents}</div><div>Active Students</div></div>
-                    <div class="stat-card" style="background:#fee2e2;"><div class="stat-number" style="color:#dc2626">${inactiveStudents}</div><div>Inactive</div></div>
-                    <div class="stat-card"><div class="stat-number">${classes.length}</div><div>Classes</div></div>
-                    <div class="stat-card"><div class="stat-number">${subjects.length}</div><div>Subjects</div></div>
-                `;
-            } catch (err) {
-                console.error('Failed to load stats', err);
-            }
-        }
-
-        async function loadClassesDropdowns() {
-            try {
-                const classes = await apiCall('classes');
-                const attClass = document.getElementById('attClass');
-                const reportClass = document.getElementById('reportClass');
-                
-                let options = '<option value="">Select Class</option>';
-                classes.forEach(c => {
-                    options += `<option value="${c.id}">${c.name}</option>`;
-                });
-                
-                attClass.innerHTML = options;
-                reportClass.innerHTML = '<option value="">All Classes</option>' + options;
-            } catch (err) {
-                console.error('Failed to load classes', err);
-            }
-        }
-
-        async function loadSubjectsForClass() {
-            try {
-                const subjects = await apiCall('subjects');
-                const subjectSelect = document.getElementById('attSubject');
-                subjectSelect.innerHTML = '<option value="">Select Subject</option>' +
-                    subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-            } catch (err) {
-                console.error('Failed to load subjects', err);
-            }
-        }
-
-        async function loadReportFilters() {
-            try {
-                const students = await apiCall(`students?term=${currentTerm}`);
-                const activeStudents = students.filter(s => s.status === 'active');
-                const studentSelect = document.getElementById('reportStudent');
-                studentSelect.innerHTML = '<option value="">All Students</option>' +
-                    activeStudents.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-            } catch (err) {
-                console.error('Failed to load students', err);
-            }
-        }
-
-        // ==================== MODAL HELPERS ====================
-        function openModal(title, html) {
-            document.getElementById('modalTitle').innerText = title;
-            document.getElementById('modalBody').innerHTML = html;
-            document.getElementById('modal').style.display = 'flex';
-        }
-
-        function closeModal() {
-            document.getElementById('modal').style.display = 'none';
-        }
-
-        // ==================== TEACHER MANAGEMENT ====================
-        function showAddTeacherModal() {
-            const randomPass = Math.random().toString(36).substring(2, 8);
-            openModal('Add Teacher', `
-                <input type="email" id="teacherEmail" placeholder="Teacher Email" class="input-field">
-                <input type="text" id="teacherName" placeholder="Full Name" class="input-field">
-                <select id="teacherRole" class="input-field">
-                    <option value="teacher">Subject Teacher</option>
-                    <option value="classteacher">Class Teacher</option>
-                </select>
-                <input type="text" id="teacherPass" placeholder="Password" class="input-field" value="${randomPass}">
-                <button onclick="addTeacher()" class="btn-primary">Add Teacher</button>
-            `);
-        }
-
-        async function addTeacher() {
-            const email = document.getElementById('teacherEmail').value.trim();
-            const name = document.getElementById('teacherName').value.trim();
-            const role = document.getElementById('teacherRole').value;
-            const password = document.getElementById('teacherPass').value;
-
-            if (!email || !name) {
-                alert('Email and name required');
-                return;
-            }
-
-            try {
-                await apiCall('users/teachers', 'POST', { email, name, role, password });
-                alert(`✅ Teacher added! Password: ${password}`);
-                closeModal();
-                loadAdminStats();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        // ==================== CLASS MANAGEMENT ====================
-        function showAddClassModal() {
-            openModal('Create Class', `
-                <input type="text" id="className" placeholder="e.g., Form 3A, Grade 5" class="input-field">
-                <button onclick="addClass()" class="btn-primary">Create Class</button>
-            `);
-        }
-
-        async function addClass() {
-            const name = document.getElementById('className').value.trim();
-            if (!name) {
-                alert('Enter class name');
-                return;
-            }
-
-            try {
-                await apiCall('classes', 'POST', { name });
-                alert('✅ Class created');
-                closeModal();
-                loadClassesDropdowns();
-                loadAdminStats();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        // ==================== SUBJECT MANAGEMENT ====================
-        function showAddSubjectModal() {
-            openModal('Add Subject', `
-                <input type="text" id="subjectName" placeholder="e.g., Physics, History" class="input-field">
-                <button onclick="addSubject()" class="btn-primary">Add Subject</button>
-            `);
-        }
-
-        async function addSubject() {
-            const name = document.getElementById('subjectName').value.trim();
-            if (!name) {
-                alert('Enter subject name');
-                return;
-            }
-
-            try {
-                await apiCall('subjects', 'POST', { name });
-                alert('✅ Subject added');
-                closeModal();
-                loadAdminStats();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        // ==================== TEACHER ASSIGNMENTS ====================
-        async function showAssignSubjectModal() {
-            try {
-                const [teachers, classes, subjects] = await Promise.all([
-                    apiCall('users/teachers'),
-                    apiCall('classes'),
-                    apiCall('subjects')
-                ]);
-
-                let teacherOpts = '<option value="">Select Teacher</option>';
-                teachers.forEach(t => {
-                    teacherOpts += `<option value="${t.email}">${t.name}</option>`;
-                });
-
-                let classOpts = '<option value="">Select Class</option>';
-                classes.forEach(c => {
-                    classOpts += `<option value="${c.id}">${c.name}</option>`;
-                });
-
-                let subOpts = '<option value="">Select Subject</option>';
-                subjects.forEach(s => {
-                    subOpts += `<option value="${s.id}">${s.name}</option>`;
-                });
-
-                openModal('Assign Subject to Teacher', `
-                    <select id="assignTeacher" class="input-field">${teacherOpts}</select>
-                    <select id="assignClass" class="input-field">${classOpts}</select>
-                    <select id="assignSubject" class="input-field">${subOpts}</select>
-                    <button onclick="assignSubjectToTeacher()" class="btn-primary">Assign</button>
-                `);
-            } catch (err) {
-                alert('Failed to load data');
-            }
-        }
-
-        async function assignSubjectToTeacher() {
-            const teacher_email = document.getElementById('assignTeacher').value;
-            const class_id = parseInt(document.getElementById('assignClass').value);
-            const subject_id = parseInt(document.getElementById('assignSubject').value);
-
-            if (!teacher_email || !class_id || !subject_id) {
-                alert('Select all fields');
-                return;
-            }
-
-            try {
-                await apiCall('teacher-assignments', 'POST', { teacher_email, class_id, subject_id });
-                alert('✅ Subject assigned');
-                closeModal();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        // ==================== STUDENT MANAGEMENT ====================
-        async function showRegisterStudentModal() {
-            try {
-                const classes = await apiCall('classes');
-                let classOptions = '<option value="">Select Class</option>';
-                classes.forEach(c => {
-                    classOptions += `<option value="${c.id}">${c.name}</option>`;
-                });
-
-                openModal('📝 Register Student for ' + currentTerm, `
-                    <div class="info-msg" style="margin-bottom:12px">
-                        Registering student for: <strong>${currentTerm}</strong><br>
-                        Students not re-registered each term will be marked inactive
-                    </div>
-                    <input type="text" id="studentName" placeholder="Student Full Name" class="input-field">
-                    <select id="studentClass" class="input-field">${classOptions}</select>
-                    <select id="studentStatus" class="input-field">
-                        <option value="active">Active (Attending)</option>
-                        <option value="inactive">Inactive (Not attending)</option>
-                    </select>
-                    <button onclick="registerStudent()" class="btn-primary">Register Student</button>
-                `);
-            } catch (err) {
-                alert('Failed to load classes');
-            }
-        }
-
-        async function registerStudent() {
-            const name = document.getElementById('studentName').value.trim();
-            const class_id = parseInt(document.getElementById('studentClass').value);
-            const status = document.getElementById('studentStatus').value;
-
-            if (!name || !class_id) {
-                alert('Name and class required');
-                return;
-            }
-
-            try {
-                await apiCall('students', 'POST', { name, class_id, term: currentTerm, status });
-                alert(`✅ Student ${name} registered for ${currentTerm}!`);
-                closeModal();
-                loadAdminStats();
-                loadReportFilters();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        async function showUpdateStudentModal() {
-            try {
-                const students = await apiCall(`students?term=${currentTerm}`);
-                let studentOptions = '<option value="">Select Student...</option>';
-                students.forEach(s => {
-                    studentOptions += `<option value="${s.id}">${s.name} - ${s.status}</option>`;
-                });
-
-                openModal('🔄 Update Student Status', `
-                    <select id="updateStudentId" class="input-field">${studentOptions}</select>
-                    <select id="updateStudentStatus" class="input-field">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="sick">Sick/Home</option>
-                        <option value="suspended">Suspended</option>
-                        <option value="transferred">Transferred</option>
-                    </select>
-                    <button onclick="updateStudentStatus()" class="btn-primary">Update Status</button>
-                `);
-            } catch (err) {
-                alert('Failed to load students');
-            }
-        }
-
-        async function updateStudentStatus() {
-            const studentId = document.getElementById('updateStudentId').value;
-            const newStatus = document.getElementById('updateStudentStatus').value;
-
-            if (!studentId) {
-                alert('Select a student');
-                return;
-            }
-
-            try {
-                await apiCall(`students/${studentId}`, 'PUT', { status: newStatus });
-                alert(`✅ Student status updated to: ${newStatus}`);
-                closeModal();
-                loadAdminStats();
-                loadReportFilters();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        async function cleanupInactiveStudents() {
-            if (!confirm('Remove students not registered for current term?')) return;
-
-            try {
-                const result = await apiCall('students/cleanup', 'POST', { term: currentTerm });
-                alert(`🧹 ${result.message}`);
-                loadAdminStats();
-                loadReportFilters();
-            } catch (err) {
-                alert(err.message);
-            }
-        }
-
-        // ==================== ATTENDANCE ====================
-        async function loadStudentsForAttendance() {
-            const classId = document.getElementById('attClass').value;
-            const subjectId = document.getElementById('attSubject').value;
-            const session = document.getElementById('attSession').value;
-            const date = document.getElementById('attDate').value;
-
-            if (!classId || !subjectId) {
-                alert('Please select class and subject');
-                return;
-            }
-
-            try {
-                const [students, attendanceRecords] = await Promise.all([
-                    apiCall(`students?term=${currentTerm}&class_id=${classId}`),
-                    apiCall(`attendance?term=${currentTerm}&class_id=${classId}`)
-                ]);
-
-                const attendanceDiv = document.getElementById('attendanceList');
-
-                if (students.length === 0) {
-                    attendanceDiv.innerHTML = '<div class="card">⚠️ No active students in this class for current term.</div>';
-                    document.getElementById('saveAttendanceBtn').style.display = 'none';
-                    return;
-                }
-
-                // Find existing record for this exact session
-                const existingRecord = attendanceRecords.find(a => 
-                    a.date === date && 
-                    a.classId == classId && 
-                    a.subjectId == subjectId && 
-                    a.session === session
-                );
-
-                attendanceRecordsMap = {};
-                let html = '';
-
-                students.filter(s => s.status === 'active').forEach(student => {
-                    const existingStatus = existingRecord?.records?.find(r => r.studentId == student.id)?.status || '';
-                    if (existingStatus) attendanceRecordsMap[student.id] = existingStatus;
-
-                    html += `
-                        <div class="attendance-item" data-student="${student.id}">
-                            <span class="student-name">📖 ${student.name} <span class="student-status status-active">ACTIVE</span></span>
-                            <div class="attendance-buttons">
-                                <button class="btn-present ${existingStatus === 'present' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'present')">Present</button>
-                                <button class="btn-absent ${existingStatus === 'absent' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'absent')">Absent</button>
-                                <button class="btn-sick ${existingStatus === 'sick' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'sick')">Sick</button>
-                                <button class="btn-emergency ${existingStatus === 'emergency' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'emergency')">Emergency</button>
-                            </div>
-                        </div>
-                    `;
-                });
-
-                attendanceDiv.innerHTML = html;
-                document.getElementById('saveAttendanceBtn').style.display = 'block';
-                currentAttendanceMeta = { classId, subjectId, session, date };
-            } catch (err) {
-                alert('Failed to load students: ' + err.message);
-            }
-        }
-
-        function setAttendance(studentId, status) {
-            attendanceRecordsMap[studentId] = status;
-            const item = document.querySelector(`.attendance-item[data-student="${studentId}"]`);
-            if (item) {
-                item.querySelector('.btn-present').classList.remove('active');
-                item.querySelector('.btn-absent').classList.remove('active');
-                item.querySelector('.btn-sick').classList.remove('active');
-                item.querySelector('.btn-emergency').classList.remove('active');
-                item.querySelector(`.btn-${status}`).classList.add('active');
-            }
-        }
-
-        async function saveAttendance() {
-            if (!currentAttendanceMeta) {
-                alert('Load students first');
-                return;
-            }
-
-            const { classId, subjectId, session, date } = currentAttendanceMeta;
-            const records = Object.entries(attendanceRecordsMap).map(([sid, st]) => ({
-                studentId: parseInt(sid),
-                status: st
-            }));
-
-            if (records.length === 0) {
-                alert('No attendance marked');
-                return;
-            }
-
-            try {
-                await apiCall('attendance', 'POST', {
-                    date,
-                    class_id: parseInt(classId),
-                    subject_id: parseInt(subjectId),
-                    session,
-                    records,
-                    term: currentTerm
-                });
-                alert('✅ Attendance saved successfully!');
-            } catch (err) {
-                alert('Failed to save: ' + err.message);
-            }
-        }
-
-        // ==================== VIEW DATA & REPORTS ====================
-        async function viewAllData() {
-            try {
-                const data = await apiCall(`school/data?term=${currentTerm}`);
-                
-                let html = `<h4>👥 Teachers (${data.teachers.length})</h4>
-                    <ul style="list-style:none; padding:0;">
-                        ${data.teachers.map(u => `<li class="list-item">${u.name} (${u.email}) - ${u.role}</li>`).join('') || '<li>No teachers</li>'}
-                    </ul>
-                    <h4>🎓 Students (${data.students.length})</h4>
-                    <ul style="list-style:none; padding:0;">
-                        ${data.students.slice(0, 20).map(s => `<li class="list-item">${s.name} - ${s.status}</li>`).join('') || '<li>No students</li>'}
-                    </ul>
-                    <h4>📚 Subjects (${data.subjects.length})</h4>
-                    <ul style="list-style:none; padding:0;">
-                        ${data.subjects.map(s => `<li class="list-item">${s.name}</li>`).join('')}
-                    </ul>`;
-                
-                openModal('📊 All School Data', html);
-            } catch (err) {
-                alert('Failed to load data');
-            }
-        }
-
-        async function viewReports() {
-            try {
-                const records = await apiCall(`attendance?term=${currentTerm}&limit=10`);
-                const [classes, subjects] = await Promise.all([
-                    apiCall('classes'),
-                    apiCall('subjects')
-                ]);
-
-                const classMap = Object.fromEntries(classes.map(c => [c.id, c.name]));
-                const subjectMap = Object.fromEntries(subjects.map(s => [s.id, s.name]));
-
-                let html = `<h4>📥 Recent Attendance Records</h4><div style="max-height:400px; overflow-y:auto;">`;
-                
-                records.forEach(a => {
-                    const present = a.records.filter(r => r.status === 'present').length;
-                    const absent = a.records.filter(r => r.status === 'absent').length;
-                    html += `<div class="report-card">
-                        <strong>${a.date}</strong> - ${classMap[a.classId] || 'Unknown'} - ${subjectMap[a.subjectId] || 'Unknown'}<br>
-                        ✅ Present: ${present} | ❌ Absent: ${absent}
-                    </div>`;
-                });
-                
-                html += `</div>`;
-                openModal('📊 Attendance Reports', html);
-            } catch (err) {
-                alert('Failed to load reports');
-            }
-        }
-
-        async function generateReport() {
-            const classId = document.getElementById('reportClass').value;
-            const studentId = document.getElementById('reportStudent').value;
-            const statusFilter = document.getElementById('reportStatus').value;
-            const startDate = document.getElementById('reportStart').value;
-            const endDate = document.getElementById('reportEnd').value;
-
-            try {
-                let url = `reports/attendance-summary?term=${currentTerm}`;
-                if (classId) url += `&class_id=${classId}`;
-
-                const summary = await apiCall(url);
-                let filtered = summary;
-
-                if (studentId) {
-                    filtered = filtered.filter(s => s.studentId == studentId);
-                }
-                if (statusFilter) {
-                    // Summary doesn't have per-record status, so we filter differently
-                    // For now, just show all
-                }
-
-                if (filtered.length === 0) {
-                    document.getElementById('reportResult').innerHTML = '<div class="card">📭 No attendance data</div>';
-                    return;
-                }
-
-                let html = `<table>
-                    <thead>
-                        <tr>
-                            <th>Student</th>
-                            <th>Present</th>
-                            <th>Absent</th>
-                            <th>Total</th>
-                            <th>Rate</th>
-                        </tr>
-                    </thead>
-                    <tbody>`;
-
-                filtered.forEach(s => {
-                    html += `<tr>
-                        <td style="font-weight:600;">${s.studentName}</td>
-                        <td style="color:#059669">${s.present}</td>
-                        <td style="color:#dc2626">${s.absent}</td>
-                        <td><strong>${s.total}</strong></td>
-                        <td><strong>${s.attendanceRate}%</strong></td>
-                    </tr>`;
-                });
-
-                html += `</tbody></table>`;
-                document.getElementById('reportResult').innerHTML = html;
-            } catch (err) {
-                alert('Failed to generate report: ' + err.message);
-            }
-        }
-
-        function exportReport() {
-            const reportText = document.getElementById('reportResult').innerText;
-            if (!reportText || reportText.includes('No attendance')) {
-                alert('Generate a report first');
-                return;
-            }
-
-            const blob = new Blob([reportText], { type: 'text/csv' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `raven_attendance_${currentTerm}_${new Date().toISOString().slice(0, 10)}.csv`;
-            a.click();
-            URL.revokeObjectURL(a.href);
-        }
-
-        // ==================== EVENTS & INIT ====================
-        document.getElementById('currentTerm').addEventListener('change', () => {
-            currentTerm = document.getElementById('currentTerm').value;
-            updateTermDisplay();
-            if (currentUser) {
-                loadAdminStats();
-                loadReportFilters();
-            }
-        });
-
-        // PWA Service Worker (keep exactly as requested)
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('✅ SW registered:', reg.scope))
-                    .catch(err => console.log('❌ SW registration failed:', err));
+			// ============ PART 1: GLOBAL STATE ============
+let currentUser = null;
+let currentTenant = null;
+let currentTerm = 'term1-2026';
+let currentAttendanceMeta = null;
+let attendanceRecordsMap = {};
+
+const SUPER_ADMINS = [
+    { email: 'admin1@school.com', password: 'pass123', name: 'Admin One' },
+    { email: 'admin2@school.com', password: 'pass123', name: 'Admin Two' },
+    { email: 'admin3@school.com', password: 'pass123', name: 'Admin Three' }
+];
+
+const BACKEND_URL = 'https://raven-attendance.onrender.com';
+
+function isLocalStorageAvailable() {
+    try {
+        const test = '__test__';
+        localStorage.setItem(test, test);
+        localStorage.removeItem(test);
+        return true;
+    } catch (e) { return false; }
+}
+
+function simpleHash(pwd) {
+    let hash = 0;
+    for (let i = 0; i < pwd.length; i++) {
+        hash = ((hash << 5) - hash) + pwd.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash.toString();
+}
+
+let _memoryData = null;
+
+// ============ PART 2: DATA MANAGEMENT ============
+function getSystemData() {
+    const defaultData = {
+        tenants: [], users: [], classes: [], students: [],
+        subjects: [
+            { id: 101, name: 'Mathematics', tenantId: null },
+            { id: 102, name: 'English', tenantId: null },
+            { id: 103, name: 'Science', tenantId: null },
+            { id: 104, name: 'Social Studies', tenantId: null }
+        ],
+        teacherAssignments: [], attendance: [], reports: []
+    };
+    
+    const adminTenantId = 999999;
+    SUPER_ADMINS.forEach((admin, index) => {
+        if (!defaultData.users.find(u => u.email === admin.email)) {
+            defaultData.users.push({
+                id: 1000 + index, email: admin.email, name: admin.name,
+                password: simpleHash(admin.password), role: 'super_admin',
+                tenantId: adminTenantId, isPreConfigured: true,
+                createdAt: new Date().toISOString()
             });
         }
-
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            const installBtn = document.getElementById('installAppBtn');
-            if (installBtn) {
-                installBtn.style.display = 'block';
-                installBtn.onclick = () => {
-                    deferredPrompt.prompt();
-                    deferredPrompt.userChoice.then(() => deferredPrompt = null);
-                };
-            }
+    });
+    
+    if (!defaultData.tenants.find(t => t.id === adminTenantId)) {
+        defaultData.tenants.push({ 
+            id: adminTenantId, name: 'Raven School', 
+            createdBy: 'system', createdAt: new Date().toISOString() 
         });
+    }
+    
+    if (isLocalStorageAvailable()) {
+        const stored = localStorage.getItem('raven_attendance_v4');
+        if (stored) return JSON.parse(stored);
+        localStorage.setItem('raven_attendance_v4', JSON.stringify(defaultData));
+        return defaultData;
+    } else {
+        if (_memoryData === null) _memoryData = JSON.parse(JSON.stringify(defaultData));
+        return _memoryData;
+    }
+}
 
-        window.addEventListener('online', () => {
-            const status = document.getElementById('connectionStatus');
-            status.innerHTML = '🟢 Back Online';
-            status.style.background = '#d1fae5';
-            status.style.color = '#065f46';
-            status.style.display = 'block';
-            setTimeout(() => status.style.display = 'none', 3000);
+function saveSystemData(data) {
+    if (isLocalStorageAvailable()) {
+        localStorage.setItem('raven_attendance_v4', JSON.stringify(data));
+    } else {
+        _memoryData = JSON.parse(JSON.stringify(data));
+    }
+}
+
+function getTenantData() {
+    const data = getSystemData();
+    if (!currentUser || !currentUser.tenantId) return data;
+    const tenantId = currentUser.tenantId;
+    return {
+        ...data,
+        users: data.users.filter(u => u.tenantId === tenantId && u.role !== 'super_admin'),
+        classes: data.classes.filter(c => c.tenantId === tenantId),
+        students: data.students.filter(s => s.tenantId === tenantId),
+        subjects: data.subjects.filter(s => s.tenantId === tenantId || s.tenantId === null),
+        teacherAssignments: data.teacherAssignments.filter(a => a.tenantId === tenantId),
+        attendance: data.attendance.filter(a => a.tenantId === tenantId),
+        reports: data.reports.filter(r => r.tenantId === tenantId)
+    };
+}
+
+// ============ PART 3: API CALLS (FIXED) ============
+async function apiCall(endpoint, method = 'GET', body = null) {
+    const token = localStorage.getItem('raven_token');
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/${endpoint}`, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token ? `Bearer ${token}` : ''
+            },
+            body: body ? JSON.stringify(body) : null
         });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`API Error ${response.status}:`, errorText.substring(0, 200));
+            return null;
+        }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Network Error:', error);
+        return null;
+    }
+}
 
-        window.addEventListener('offline', () => {
-            const status = document.getElementById('connectionStatus');
-            status.innerHTML = '🔴 Offline - Working in offline mode';
-            status.style.background = '#fee2e2';
-            status.style.color = '#991b1b';
-            status.style.display = 'block';
+// ============ PART 4: AUTHENTICATION ============
+function changeTerm() {
+    currentTerm = document.getElementById('currentTerm').value;
+    updateTermDisplay();
+}
+
+function updateTermDisplay() {
+    const termSelect = document.getElementById('currentTerm');
+    const termText = termSelect.options[termSelect.selectedIndex].text;
+    document.getElementById('currentTermDisplay').innerText = termText;
+    if (document.getElementById('termDisplay')) {
+        document.getElementById('termDisplay').innerText = `📅 ${termText}`;
+    }
+}
+
+async function login() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorDiv = document.getElementById('loginError');
+    
+    if (!email || !password) { 
+        errorDiv.innerText = 'Enter email & password'; 
+        return; 
+    }
+    
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
         });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.token) {
+            localStorage.setItem('raven_token', data.token);
+            currentUser = data.user;
+            currentTenant = { id: currentUser.tenant_id, name: 'Raven School' };
+            currentTerm = document.getElementById('currentTerm').value;
+            
+            document.getElementById('authScreen').style.display = 'none';
+            document.getElementById('dashboardScreen').style.display = 'block';
+            loadDashboard();
+            errorDiv.innerText = '';
+            return;
+        } else {
+            errorDiv.innerText = data.error || 'Login failed';
+            return;
+        }
+    } catch (err) {
+        console.log('Backend unavailable, using offline mode');
+    }
+    
+    // Fallback to localStorage
+    const data = getSystemData();
+    let user = data.users.find(u => u.email === email && u.password === simpleHash(password));
+    
+    if (user) {
+        currentUser = user;
+        currentTenant = data.tenants.find(t => t.id === user.tenantId);
+        currentTerm = document.getElementById('currentTerm').value;
+        
+        document.getElementById('authScreen').style.display = 'none';
+        document.getElementById('dashboardScreen').style.display = 'block';
+        loadDashboard();
+        errorDiv.innerText = '';
+    } else {
+        errorDiv.innerText = 'Invalid email or password';
+    }
+}
 
-        // Restore session on load
-        updateTermDisplay();
-        restoreSession();
+function logout() {
+    currentUser = null;
+    currentTenant = null;
+    localStorage.removeItem('raven_token');
+    document.getElementById('dashboardScreen').style.display = 'none';
+    document.getElementById('authScreen').style.display = 'block';
+    document.getElementById('loginEmail').value = '';
+    document.getElementById('loginPassword').value = '';
+}
 
-        console.log('✅ Raven Attendance System Ready');
-    </script>
+// ============ PART 5: DASHBOARD ============
+function loadDashboard() {
+    document.getElementById('userNameDisplay').innerHTML = `👋 ${currentUser.name}`;
+    document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : 'ADMIN';
+    
+    if (currentTenant) {
+        document.getElementById('tenantDisplay').style.display = 'inline-block';
+        document.getElementById('tenantDisplay').innerText = `🏫 ${currentTenant.name}`;
+    }
+    
+    updateTermDisplay();
+    loadAdminStats();
+    loadClassesDropdowns();
+    loadReportFilters();
+    document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
+}
+
+function loadAdminStats() {
+    const data = getTenantData();
+    const teachers = data.users.filter(u => u.role === 'teacher' || u.role === 'classteacher').length;
+    const activeStudents = data.students.filter(s => s.status === 'active' && s.termRegistered === currentTerm).length;
+    const inactiveStudents = data.students.filter(s => s.status !== 'active' || s.termRegistered !== currentTerm).length;
+    const classes = data.classes.length;
+    const subjects = data.subjects.filter(s => s.tenantId === currentUser.tenantId || s.tenantId === null).length;
+    
+    document.getElementById('adminStats').innerHTML = `
+        <div class="stat-card"><div class="stat-number">${teachers}</div><div>Teachers</div></div>
+        <div class="stat-card" style="background:#d1fae5;"><div class="stat-number" style="color:#059669">${activeStudents}</div><div>Active Students</div></div>
+        <div class="stat-card" style="background:#fee2e2;"><div class="stat-number" style="color:#dc2626">${inactiveStudents}</div><div>Inactive</div></div>
+        <div class="stat-card"><div class="stat-number">${classes}</div><div>Classes</div></div>
+        <div class="stat-card"><div class="stat-number">${subjects}</div><div>Subjects</div></div>
+    `;
+}
+
+function loadClassesDropdowns() {
+    const data = getTenantData();
+    const attClass = document.getElementById('attClass');
+    const reportClass = document.getElementById('reportClass');
+    let options = '<option value="">Select Class</option>';
+    data.classes.forEach(c => { options += `<option value="${c.id}">${c.name}</option>`; });
+    attClass.innerHTML = options;
+    reportClass.innerHTML = '<option value="">All Classes</option>' + options;
+}
+
+function loadSubjectsForClass() {
+    const classId = document.getElementById('attClass').value;
+    const data = getTenantData();
+    const subjectSelect = document.getElementById('attSubject');
+    if (!classId) { 
+        subjectSelect.innerHTML = '<option value="">Select Subject</option>'; 
+        return; 
+    }
+    subjectSelect.innerHTML = '<option value="">Select Subject</option>' + 
+        data.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+}
+
+function loadReportFilters() {
+    const data = getTenantData();
+    const studentSelect = document.getElementById('reportStudent');
+    const activeStudents = data.students.filter(s => s.status === 'active' && s.termRegistered === currentTerm);
+    studentSelect.innerHTML = '<option value="">All Students</option>' + 
+        activeStudents.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+}
+
+// ============ PART 6: ATTENDANCE ============
+function loadStudentsForAttendance() {
+    const classId = document.getElementById('attClass').value;
+    const subjectId = document.getElementById('attSubject').value;
+    const session = document.getElementById('attSession').value;
+    const date = document.getElementById('attDate').value;
+    
+    if (!classId || !subjectId) { 
+        alert('Please select class and subject'); 
+        return; 
+    }
+    
+    const data = getTenantData();
+    const classStudents = data.students.filter(s => s.classId == classId && s.status === 'active' && s.termRegistered === currentTerm);
+    const attendanceDiv = document.getElementById('attendanceList');
+    
+    if (classStudents.length === 0) { 
+        attendanceDiv.innerHTML = '<div class="card">⚠️ No active students in this class for current term.</div>'; 
+        document.getElementById('saveAttendanceBtn').style.display = 'none'; 
+        return; 
+    }
+    
+    const existingRecord = data.attendance.find(a => a.date === date && a.classId == classId && a.subjectId == subjectId && a.session === session && a.term === currentTerm);
+    attendanceRecordsMap = {};
+    let html = '';
+    
+    classStudents.forEach(student => {
+        const existingStatus = existingRecord?.records?.find(r => r.studentId == student.id)?.status || '';
+        if (existingStatus) attendanceRecordsMap[student.id] = existingStatus;
+        
+        html += `
+            <div class="attendance-item" data-student="${student.id}">
+                <span class="student-name">📖 ${student.name} <span class="student-status status-active">ACTIVE</span></span>
+                <div class="attendance-buttons">
+                    <button class="btn-present ${existingStatus === 'present' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'present')">Present</button>
+                    <button class="btn-absent ${existingStatus === 'absent' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'absent')">Absent</button>
+                    <button class="btn-sick ${existingStatus === 'sick' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'sick')">Sick</button>
+                    <button class="btn-emergency ${existingStatus === 'emergency' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'emergency')">Emergency</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    attendanceDiv.innerHTML = html;
+    document.getElementById('saveAttendanceBtn').style.display = 'block';
+    currentAttendanceMeta = { classId, subjectId, session, date };
+}
+
+function setAttendance(studentId, status) {
+    attendanceRecordsMap[studentId] = status;
+    const item = document.querySelector(`.attendance-item[data-student="${studentId}"]`);
+    if (item) {
+        item.querySelector('.btn-present').classList.remove('active');
+        item.querySelector('.btn-absent').classList.remove('active');
+        item.querySelector('.btn-sick').classList.remove('active');
+        item.querySelector('.btn-emergency').classList.remove('active');
+        item.querySelector(`.btn-${status}`).classList.add('active');
+    }
+}
+
+function saveAttendance() {
+    if (!currentAttendanceMeta) { 
+        alert('Load students first'); 
+        return; 
+    }
+    const { classId, subjectId, session, date } = currentAttendanceMeta;
+    const records = Object.entries(attendanceRecordsMap).map(([sid, st]) => ({ studentId: parseInt(sid), status: st }));
+    if (records.length === 0) { 
+        alert('No attendance marked'); 
+        return; 
+    }
+    
+    const data = getSystemData();
+    const existingIndex = data.attendance.findIndex(a => a.date === date && a.classId == classId && a.subjectId == subjectId && a.session === session && a.tenantId === currentUser.tenantId && a.term === currentTerm);
+    const newEntry = { 
+        date, classId, subjectId, session, records, 
+        takenBy: currentUser.email, takenAt: new Date().toISOString(), 
+        tenantId: currentUser.tenantId, term: currentTerm 
+    };
+    
+    if (existingIndex !== -1) {
+        data.attendance[existingIndex] = newEntry;
+    } else {
+        data.attendance.push(newEntry);
+    }
+    saveSystemData(data);
+    alert('✅ Attendance saved successfully!');
+}
+
+// ============ PART 7: STUDENT MANAGEMENT ============
+function closeModal() { 
+    document.getElementById('modal').style.display = 'none'; 
+}
+
+function showRegisterStudentModal() {
+    const data = getTenantData();
+    let classOptions = '<option value="">Select Class</option>';
+    data.classes.forEach(c => { classOptions += `<option value="${c.id}">${c.name}</option>`; });
+    
+    document.getElementById('modalTitle').innerText = '📝 Register Student for ' + currentTerm;
+    document.getElementById('modalBody').innerHTML = `
+        <div class="info-msg" style="margin-bottom:12px">
+            Registering student for: <strong>${currentTerm}</strong><br>
+            Students not re-registered each term will be marked inactive
+        </div>
+        <input type="text" id="studentName" placeholder="Student Full Name" class="input-field">
+        <select id="studentClass" class="input-field">${classOptions}</select>
+        <select id="studentStatus" class="input-field">
+            <option value="active">Active (Attending)</option>
+            <option value="inactive">Inactive (Not attending)</option>
+        </select>
+        <button onclick="registerStudent()" class="btn-primary">Register Student</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function registerStudent() {
+    const name = document.getElementById('studentName').value.trim();
+    const classId = document.getElementById('studentClass').value;
+    const status = document.getElementById('studentStatus').value;
+    if (!name || !classId) { 
+        alert('Name and class required'); 
+        return; 
+    }
+    
+    const data = getSystemData();
+    const existingStudent = data.students.find(s => s.name === name && s.classId == classId && s.tenantId === currentUser.tenantId);
+    
+    if (existingStudent) {
+        existingStudent.termRegistered = currentTerm;
+        existingStudent.status = status;
+        existingStudent.lastUpdated = new Date().toISOString();
+        alert(`✅ Student ${name} updated for ${currentTerm}!`);
+    } else {
+        data.students.push({
+            id: Date.now(), name, classId: parseInt(classId),
+            tenantId: currentUser.tenantId, termRegistered: currentTerm,
+            status, addedBy: currentUser.email,
+            addedAt: new Date().toISOString(), lastUpdated: new Date().toISOString()
+        });
+        alert(`✅ New student ${name} registered for ${currentTerm}!`);
+    }
+    saveSystemData(data);
+    closeModal();
+    loadAdminStats();
+    loadReportFilters();
+}
+
+function showUpdateStudentModal() {
+    const data = getTenantData();
+    const activeStudents = data.students.filter(s => s.termRegistered === currentTerm);
+    let studentOptions = '<option value="">Select Student...</option>';
+    activeStudents.forEach(s => {
+        const className = data.classes.find(c => c.id === s.classId)?.name || 'Unknown';
+        studentOptions += `<option value="${s.id}">${s.name} (${className}) - ${s.status}</option>`;
+    });
+    
+    document.getElementById('modalTitle').innerText = '🔄 Update Student Status';
+    document.getElementById('modalBody').innerHTML = `
+        <select id="updateStudentId" class="input-field">${studentOptions}</select>
+        <select id="updateStudentStatus" class="input-field">
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="sick">Sick/Home</option>
+            <option value="suspended">Suspended</option>
+            <option value="transferred">Transferred</option>
+        </select>
+        <button onclick="updateStudentStatus()" class="btn-primary">Update Status</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function updateStudentStatus() {
+    const studentId = document.getElementById('updateStudentId').value;
+    const newStatus = document.getElementById('updateStudentStatus').value;
+    if (!studentId) { 
+        alert('Select a student'); 
+        return; 
+    }
+    
+    const data = getSystemData();
+    const student = data.students.find(s => s.id == studentId);
+    if (student) {
+        student.status = newStatus;
+        student.lastUpdated = new Date().toISOString();
+        saveSystemData(data);
+        alert(`✅ Student ${student.name} status updated to: ${newStatus}`);
+        closeModal();
+        loadAdminStats();
+        loadReportFilters();
+    }
+}
+
+function cleanupInactiveStudents() {
+    if (!confirm('Remove students not registered for current term?')) return;
+    const data = getSystemData();
+    const beforeCount = data.students.filter(s => s.tenantId === currentUser.tenantId).length;
+    data.students = data.students.filter(s => !(s.tenantId === currentUser.tenantId && s.termRegistered !== currentTerm));
+    const afterCount = data.students.filter(s => s.tenantId === currentUser.tenantId).length;
+    saveSystemData(data);
+    alert(`🧹 Removed ${beforeCount - afterCount} inactive students.`);
+    loadAdminStats();
+    loadReportFilters();
+}
+
+// ============ PART 8: TEACHER, CLASS, SUBJECT ============
+function showAddTeacherModal() {
+    document.getElementById('modalTitle').innerText = 'Add Teacher';
+    document.getElementById('modalBody').innerHTML = `
+        <input type="email" id="teacherEmail" placeholder="Teacher Email" class="input-field">
+        <input type="text" id="teacherName" placeholder="Full Name" class="input-field">
+        <select id="teacherRole" class="input-field">
+            <option value="teacher">Subject Teacher</option>
+            <option value="classteacher">Class Teacher</option>
+        </select>
+        <input type="password" id="teacherPass" placeholder="Password" class="input-field" value="${Math.random().toString(36).substring(2, 8)}">
+        <button onclick="addTeacher()" class="btn-primary">Add Teacher</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function addTeacher() {
+    const email = document.getElementById('teacherEmail').value.trim();
+    const name = document.getElementById('teacherName').value.trim();
+    const role = document.getElementById('teacherRole').value;
+    const password = document.getElementById('teacherPass').value;
+    
+    if (!email || !name) { 
+        alert('Email and name required'); 
+        return; 
+    }
+    
+    const data = getSystemData();
+    if (data.users.find(u => u.email === email)) { 
+        alert('User already exists'); 
+        return; 
+    }
+    
+    data.users.push({
+        id: Date.now(), email, name, password: simpleHash(password),
+        role: role, tenantId: currentUser.tenantId,
+        createdBy: currentUser.email, createdAt: new Date().toISOString()
+    });
+    saveSystemData(data);
+    alert(`✅ Teacher added! Password: ${password}`);
+    closeModal();
+    loadAdminStats();
+}
+
+function showAddClassModal() {
+    document.getElementById('modalTitle').innerText = 'Create Class';
+    document.getElementById('modalBody').innerHTML = `
+        <input type="text" id="className" placeholder="e.g., Form 3A, Grade 5" class="input-field">
+        <button onclick="addClass()" class="btn-primary">Create Class</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function addClass() {
+    const name = document.getElementById('className').value.trim();
+    if(!name) { alert('Enter class name'); return; }
+    const data = getSystemData();
+    data.classes.push({ id: Date.now(), name, tenantId: currentUser.tenantId, createdBy: currentUser.email, createdAt: new Date().toISOString() });
+    saveSystemData(data);
+    alert('✅ Class created');
+    closeModal();
+    loadClassesDropdowns();
+    loadAdminStats();
+}
+
+function showAddSubjectModal() {
+    document.getElementById('modalTitle').innerText = 'Add Subject';
+    document.getElementById('modalBody').innerHTML = `
+        <input type="text" id="subjectName" placeholder="e.g., Physics, History" class="input-field">
+        <button onclick="addSubject()" class="btn-primary">Add Subject</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function addSubject() {
+    const name = document.getElementById('subjectName').value.trim();
+    if(!name) { alert('Enter subject name'); return; }
+    const data = getSystemData();
+    data.subjects.push({ id: Date.now(), name, tenantId: currentUser.tenantId, createdBy: currentUser.email, createdAt: new Date().toISOString() });
+    saveSystemData(data);
+    alert('✅ Subject added');
+    closeModal();
+    loadAdminStats();
+}
+
+function showAssignSubjectModal() {
+    const data = getTenantData();
+    let teacherOpts = '<option value="">Select Teacher</option>';
+    data.users.filter(u => u.role === 'teacher' || u.role === 'classteacher').forEach(t => { 
+        teacherOpts += `<option value="${t.email}">${t.name}</option>`; 
+    });
+    let classOpts = '<option value="">Select Class</option>';
+    data.classes.forEach(c => { classOpts += `<option value="${c.id}">${c.name}</option>`; });
+    let subOpts = '<option value="">Select Subject</option>';
+    data.subjects.forEach(s => { subOpts += `<option value="${s.id}">${s.name}</option>`; });
+    
+    document.getElementById('modalTitle').innerText = 'Assign Subject to Teacher';
+    document.getElementById('modalBody').innerHTML = `
+        <select id="assignTeacher" class="input-field">${teacherOpts}</select>
+        <select id="assignClass" class="input-field">${classOpts}</select>
+        <select id="assignSubject" class="input-field">${subOpts}</select>
+        <button onclick="assignSubjectToTeacher()" class="btn-primary">Assign</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function assignSubjectToTeacher() {
+    const teacherEmail = document.getElementById('assignTeacher').value;
+    const classId = document.getElementById('assignClass').value;
+    const subjectId = document.getElementById('assignSubject').value;
+    if(!teacherEmail || !classId || !subjectId){ alert('Select all fields'); return; }
+    const data = getSystemData();
+    data.teacherAssignments.push({ teacherEmail, classId: parseInt(classId), subjectId: parseInt(subjectId), tenantId: currentUser.tenantId, assignedBy: currentUser.email, assignedAt: new Date().toISOString() });
+    saveSystemData(data);
+    alert('✅ Subject assigned');
+    closeModal();
+}
+
+// ============ PART 9: REPORTS ============
+function viewAllData() {
+    const data = getTenantData();
+    const activeStudents = data.students.filter(s => s.status === 'active' && s.termRegistered === currentTerm);
+    
+    let html = `<h4>👥 Teachers (${data.users.filter(u => u.role !== 'admin' && u.role !== 'super_admin').length})</h4>
+        <ul style="list-style:none; padding:0;">${data.users.filter(u => u.role !== 'admin' && u.role !== 'super_admin').map(u => `<li class="list-item">${u.name} (${u.email}) - ${u.role}</li>`).join('') || '<li>No teachers</li>'}</ul>
+        <h4>🎓 Active Students (${activeStudents.length})</h4>
+        <ul style="list-style:none; padding:0;">${activeStudents.slice(0,20).map(s => `<li class="list-item">${s.name}</li>`).join('') || '<li>No active students</li>'}</ul>
+        <h4>📚 Subjects (${data.subjects.length})</h4>
+        <ul style="list-style:none; padding:0;">${data.subjects.map(s => `<li class="list-item">${s.name}</li>`).join('')}</ul>`;
+    document.getElementById('modalTitle').innerText = '📊 All School Data';
+    document.getElementById('modalBody').innerHTML = html;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function viewReports() {
+    const data = getTenantData();
+    let html = `<h4>📥 Recent Attendance Records</h4><div style="max-height:400px; overflow-y:auto;">`;
+    data.attendance.slice(-10).reverse().forEach(a => {
+        const cls = data.classes.find(c => c.id === a.classId)?.name || 'Unknown';
+        const subj = data.subjects.find(s => s.id === a.subjectId)?.name || 'Unknown';
+        const present = a.records.filter(r => r.status === 'present').length;
+        const absent = a.records.filter(r => r.status === 'absent').length;
+        html += `<div class="report-card"><strong>${a.date}</strong> - ${cls} - ${subj}<br>✅ Present: ${present} | ❌ Absent: ${absent}</div>`;
+    });
+    html += `</div>`;
+    document.getElementById('modalTitle').innerText = '📊 Attendance Reports';
+    document.getElementById('modalBody').innerHTML = html;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+function generateReport() {
+    const classId = document.getElementById('reportClass').value;
+    const studentId = document.getElementById('reportStudent').value;
+    const statusFilter = document.getElementById('reportStatus').value;
+    const startDate = document.getElementById('reportStart').value;
+    const endDate = document.getElementById('reportEnd').value;
+    const data = getTenantData();
+    
+    let filtered = data.attendance.filter(a => a.term === currentTerm);
+    if(classId) filtered = filtered.filter(a => a.classId == classId);
+    if(startDate) filtered = filtered.filter(a => a.date >= startDate);
+    if(endDate) filtered = filtered.filter(a => a.date <= endDate);
+    
+    const statsMap = {};
+    filtered.forEach(rec => {
+        rec.records.forEach(r => {
+            if(studentId && r.studentId != studentId) return;
+            if(statusFilter && r.status !== statusFilter) return;
+            if(!statsMap[r.studentId]) statsMap[r.studentId] = { present: 0, absent: 0, sick: 0, emergency: 0, total: 0 };
+            statsMap[r.studentId][r.status]++;
+            statsMap[r.studentId].total++;
+        });
+    });
+    
+    if(Object.keys(statsMap).length === 0) {
+        document.getElementById('reportResult').innerHTML = '<div class="card">📭 No attendance data</div>';
+        return;
+    }
+    
+    let html = `<table><thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Total</th><th>Rate</th></tr></thead><tbody>`;
+    for(let sid in statsMap) {
+        const student = data.students.find(s => s.id == sid);
+        if(!student) continue;
+        const s = statsMap[sid];
+        const rate = s.total > 0 ? ((s.present / s.total) * 100).toFixed(1) : 0;
+        html += `<tr><td style="font-weight:600;">${student.name}</td><td style="color:#059669">${s.present}</td><td style="color:#dc2626">${s.absent}</td><td><strong>${s.total}</strong></td><td><strong>${rate}%</strong></td></tr>`;
+    }
+    html += `</tbody></table>`;
+    document.getElementById('reportResult').innerHTML = html;
+}
+
+function exportReport() {
+    const reportText = document.getElementById('reportResult').innerText;
+    if(!reportText || reportText.includes('No attendance')) { alert('Generate a report first'); return; }
+    const blob = new Blob([reportText], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `raven_attendance_${currentTerm}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ============ PART 10: PWA & INITIALIZATION ============
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ SW registered:', reg.scope))
+            .catch(err => console.log('❌ SW registration failed:', err));
+    });
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const installBtn = document.getElementById('installAppBtn');
+    if (installBtn) {
+        installBtn.style.display = 'block';
+        installBtn.onclick = () => {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(() => deferredPrompt = null);
+        };
+    }
+    setTimeout(() => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+        }
+    }, 2000);
+});
+
+window.addEventListener('online', () => {
+    const status = document.getElementById('connectionStatus');
+    status.innerHTML = '🟢 Back Online';
+    status.style.background = '#d1fae5';
+    status.style.color = '#065f46';
+    status.style.display = 'block';
+    setTimeout(() => status.style.display = 'none', 3000);
+});
+
+window.addEventListener('offline', () => {
+    const status = document.getElementById('connectionStatus');
+    status.innerHTML = '🔴 Offline - Working in offline mode';
+    status.style.background = '#fee2e2';
+    status.style.color = '#991b1b';
+    status.style.display = 'block';
+});
+
+document.getElementById('currentTerm').addEventListener('change', changeTerm);
+updateTermDisplay();
+console.log('✅ Raven Attendance System Ready');
+console.log('🔑 Login: admin1@school.com / pass123');
+			
+</script>
 </body>
 </html>
