@@ -671,32 +671,34 @@ function logout() {
 async function loadDashboard() {
     document.getElementById('userNameDisplay').innerHTML = `👋 ${currentUser.name}`;
     document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : currentUser.role === 'classteacher' ? 'CLASS TEACHER' : 'TEACHER';
-    
+
     if (currentTenant) {
         document.getElementById('tenantDisplay').style.display = 'inline-block';
         document.getElementById('tenantDisplay').innerText = `🏫 ${currentTenant.name}`;
     }
-    
+
     updateTermDisplay();
-    
+
     const role = currentUser.role;
-    
+
     // Get all cards
     const adminControlsCard = document.querySelector('#adminPanel .card:first-child');
     const schoolOverviewCard = document.querySelector('#adminPanel .card:nth-child(2)');
     const attendanceCard = document.getElementById('attendanceSection');
     const reportsCard = document.getElementById('reportsSection');
-    
+    const flexButtons = document.querySelector('.flex-buttons');
+
     if (role === 'super_admin' || role === 'admin') {
         // ADMIN: Show everything
         if (adminControlsCard) adminControlsCard.style.display = 'block';
         if (schoolOverviewCard) schoolOverviewCard.style.display = 'block';
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
-        
+        if (flexButtons) flexButtons.style.display = 'flex';
+
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'inline-block');
-        
+
     } else if (role === 'classteacher') {
         // CLASS TEACHER: Only attendance, reports, and register students
         if (adminControlsCard) adminControlsCard.style.display = 'none';
@@ -704,16 +706,19 @@ async function loadDashboard() {
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
+        // Show the flex-buttons container
+        if (flexButtons) flexButtons.style.display = 'flex';
+        
         // Hide all buttons first
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'none');
-        
+
         // Show ONLY Register Student and Update Status buttons
         const registerBtn = document.querySelector('button[onclick="showRegisterStudentModal()"]');
         const updateBtn = document.querySelector('button[onclick="showUpdateStudentModal()"]');
         if (registerBtn) registerBtn.style.display = 'inline-block';
         if (updateBtn) updateBtn.style.display = 'inline-block';
-        
+
     } else {
         // TEACHER: Only attendance and reports
         if (adminControlsCard) adminControlsCard.style.display = 'none';
@@ -721,31 +726,35 @@ async function loadDashboard() {
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
+        // Show the flex-buttons container (will be empty but visible)
+        if (flexButtons) flexButtons.style.display = 'flex';
+        
         // Hide all buttons
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'none');
     }
-    
+
     await loadClassesDropdowns();
     await loadReportFilters();
     document.getElementById('attDate').value = new Date().toISOString().split('T')[0];
 }
+
 async function loadAdminStats() {
     const role = currentUser.role;
-    
+
     // Only show stats for admin
     if (role !== 'super_admin' && role !== 'admin') {
         document.getElementById('adminStats').innerHTML = '';
         return;
     }
-    
+
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/school/data?term=${currentTerm}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
-        
+
         document.getElementById('adminStats').innerHTML = `
             <div class="stat-card"><div class="stat-number">${data.teachers.length}</div><div>Teachers</div></div>
             <div class="stat-card" style="background:#d1fae5;"><div class="stat-number" style="color:#059669">${data.students.filter(s => s.status === 'active').length}</div><div>Active Students</div></div>
@@ -757,71 +766,74 @@ async function loadAdminStats() {
         document.getElementById('adminStats').innerHTML = `<div class="stat-card">Error loading stats</div>`;
     }
 }
+
 async function loadClassesDropdowns() {
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/classes`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) {
             console.log('Cannot load classes - permission denied');
             return;
         }
-        
+
         const classes = await response.json();
-        
+
         let options = '<option value="">Select Class</option>';
         classes.forEach(c => { options += `<option value="${c.id}">${c.name}</option>`; });
-        
+
         document.getElementById('attClass').innerHTML = options;
         document.getElementById('reportClass').innerHTML = '<option value="">All Classes</option>' + options;
     } catch (error) {
         console.error('Failed to load classes:', error);
     }
 }
+
 async function loadSubjectsForClass() {
     const classId = document.getElementById('attClass').value;
     if (!classId) { 
         document.getElementById('attSubject').innerHTML = '<option value="">Select Subject</option>'; 
         return; 
     }
-    
+
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/subjects`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) {
             console.log('Cannot load subjects - permission denied');
             document.getElementById('attSubject').innerHTML = '<option value="">Select Subject</option>';
             return;
         }
-        
+
         const subjects = await response.json();
-        
+
         document.getElementById('attSubject').innerHTML = '<option value="">Select Subject</option>' + 
             subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
     } catch (error) {
         console.error('Failed to load subjects:', error);
     }
 }
+
 async function loadReportFilters() {
     try {
         const token = localStorage.getItem('raven_token');
         const response = await fetch(`${BACKEND_URL}/api/students?term=${currentTerm}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!response.ok) {
             console.log('Cannot load students - permission denied');
             document.getElementById('reportStudent').innerHTML = '<option value="">All Students</option>';
             return;
         }
-        
+
         const students = await response.json();
-        
+
         document.getElementById('reportStudent').innerHTML = '<option value="">All Students</option>' + 
             (students || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
     } catch (error) {
