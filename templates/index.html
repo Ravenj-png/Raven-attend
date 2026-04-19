@@ -1040,194 +1040,7 @@ async function cleanupInactiveStudents() {
         alert('Connection error');
     }
 }			
-	// ============ PART 7: TEACHER, CLASS & SUBJECT MANAGEMENT ============
-function showAddTeacherModal() {
-    document.getElementById('modalTitle').innerText = 'Add Teacher';
-    document.getElementById('modalBody').innerHTML = `
-        <input type="email" id="teacherEmail" placeholder="Teacher Email" class="input-field" required>
-        <input type="text" id="teacherName" placeholder="Full Name" class="input-field" required>
-        <select id="teacherRole" class="input-field">
-            <option value="teacher">Subject Teacher</option>
-            <option value="classteacher">Class Teacher</option>
-        </select>
-        <input type="password" id="teacherPass" placeholder="Password" class="input-field" value="${Math.random().toString(36).substring(2, 10)}">
-        <small style="display:block; margin-top:-5px; margin-bottom:10px; color:#666;">⚠️ Save this password. Teacher can change later.</small>
-        <button onclick="addTeacher()" class="btn-primary">Add Teacher</button>
-    `;
-    document.getElementById('modal').style.display = 'flex';
-}
 
-async function addTeacher() {
-    const email = document.getElementById('teacherEmail').value.trim();
-    const name = document.getElementById('teacherName').value.trim();
-    const role = document.getElementById('teacherRole').value;
-    const password = document.getElementById('teacherPass').value;
-    
-    if (!email || !name || !password) { 
-        alert('Email, name, and password required'); 
-        return; 
-    }
-    
-    try {
-        const token = localStorage.getItem('raven_token');
-        const response = await fetch(`${BACKEND_URL}/api/users/teachers`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ email, name, role, password })
-        });
-        
-        if (response.ok) {
-            alert(`✅ Teacher added! Email: ${email}`);
-            closeModal();
-            await loadAdminStats();
-        } else {
-            const error = await response.json();
-            alert('❌ Error: ' + (error.error || 'Failed to add teacher'));
-        }
-    } catch (error) {
-        alert('Connection error. Teacher not added.');
-    }
-}
-
-function showAddClassModal() {
-    document.getElementById('modalTitle').innerText = 'Create Class';
-    document.getElementById('modalBody').innerHTML = `
-        <input type="text" id="className" placeholder="e.g., Form 3A, Grade 5" class="input-field">
-        <button onclick="addClass()" class="btn-primary">Create Class</button>
-    `;
-    document.getElementById('modal').style.display = 'flex';
-}
-
-async function addClass() {
-    const name = document.getElementById('className').value.trim();
-    if(!name) { alert('Enter class name'); return; }
-    
-    try {
-        const token = localStorage.getItem('raven_token');
-        const response = await fetch(`${BACKEND_URL}/api/classes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ name })
-        });
-        
-        if (response.ok) {
-            alert('✅ Class created');
-            closeModal();
-            await loadClassesDropdowns();
-            await loadAdminStats();
-        } else {
-            alert('❌ Failed to create class');
-        }
-    } catch (error) {
-        alert('Connection error');
-    }
-}
-
-function showAddSubjectModal() {
-    document.getElementById('modalTitle').innerText = 'Add Subject';
-    document.getElementById('modalBody').innerHTML = `
-        <input type="text" id="subjectName" placeholder="e.g., Physics, History" class="input-field">
-        <button onclick="addSubject()" class="btn-primary">Add Subject</button>
-    `;
-    document.getElementById('modal').style.display = 'flex';
-}
-
-async function addSubject() {
-    const name = document.getElementById('subjectName').value.trim();
-    if(!name) { alert('Enter subject name'); return; }
-    
-    try {
-        const token = localStorage.getItem('raven_token');
-        const response = await fetch(`${BACKEND_URL}/api/subjects`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ name })
-        });
-        
-        if (response.ok) {
-            alert('✅ Subject added');
-            closeModal();
-            await loadAdminStats();
-        } else {
-            alert('❌ Failed to add subject');
-        }
-    } catch (error) {
-        alert('Connection error');
-    }
-}
-
-async function showAssignSubjectModal() {
-    try {
-        const token = localStorage.getItem('raven_token');
-        const [teachersRes, classesRes, subjectsRes] = await Promise.all([
-            fetch(`${BACKEND_URL}/api/users/teachers`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${BACKEND_URL}/api/classes`, { headers: { 'Authorization': `Bearer ${token}` } }),
-            fetch(`${BACKEND_URL}/api/subjects`, { headers: { 'Authorization': `Bearer ${token}` } })
-        ]);
-        
-        const teachers = await teachersRes.json();
-        const classes = await classesRes.json();
-        const subjects = await subjectsRes.json();
-        
-        let teacherOpts = '<option value="">Select Teacher</option>';
-        teachers.forEach(t => { teacherOpts += `<option value="${t.email}">${t.name}</option>`; });
-        
-        let classOpts = '<option value="">Select Class</option>';
-        classes.forEach(c => { classOpts += `<option value="${c.id}">${c.name}</option>`; });
-        
-        let subOpts = '<option value="">Select Subject</option>';
-        subjects.forEach(s => { subOpts += `<option value="${s.id}">${s.name}</option>`; });
-        
-        document.getElementById('modalTitle').innerText = 'Assign Subject to Teacher';
-        document.getElementById('modalBody').innerHTML = `
-            <select id="assignTeacher" class="input-field">${teacherOpts}</select>
-            <select id="assignClass" class="input-field">${classOpts}</select>
-            <select id="assignSubject" class="input-field">${subOpts}</select>
-            <button onclick="assignSubjectToTeacher()" class="btn-primary">Assign</button>
-        `;
-        document.getElementById('modal').style.display = 'flex';
-    } catch (error) {
-        alert('Failed to load data');
-    }
-}
-
-async function assignSubjectToTeacher() {
-    const teacherEmail = document.getElementById('assignTeacher').value;
-    const classId = document.getElementById('assignClass').value;
-    const subjectId = document.getElementById('assignSubject').value;
-    
-    if(!teacherEmail || !classId || !subjectId){ alert('Select all fields'); return; }
-    
-    try {
-        const token = localStorage.getItem('raven_token');
-        const response = await fetch(`${BACKEND_URL}/api/teacher-assignments`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ teacher_email: teacherEmail, class_id: parseInt(classId), subject_id: parseInt(subjectId) })
-        });
-        
-        if (response.ok) {
-            alert('✅ Subject assigned');
-            closeModal();
-        } else {
-            alert('❌ Assignment failed');
-        }
-    } catch (error) {
-        alert('Connection error');
-    }
-}		
 			// ============ PART 7: TEACHER, CLASS & SUBJECT MANAGEMENT ============
 function showAddTeacherModal() {
     document.getElementById('modalTitle').innerText = 'Add Teacher';
@@ -1416,6 +1229,208 @@ async function assignSubjectToTeacher() {
         alert('Connection error');
     }
 }
+
+// ============ PART 8: REPORTS & PWA FUNCTIONS ============
+async function viewAllData() {
+    try {
+        const token = localStorage.getItem('raven_token');
+        const response = await fetch(`${BACKEND_URL}/api/school/data?term=${currentTerm}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        let html = `
+            <h4>👥 Teachers (${data.teachers.length})</h4>
+            <ul style="list-style:none; padding:0;">${data.teachers.map(t => `<li class="list-item">${t.name} (${t.email}) - ${t.role}</li>`).join('') || '<li>No teachers</li>'}</ul>
+            <h4>🎓 Active Students (${data.students.filter(s => s.status === 'active').length})</h4>
+            <ul style="list-style:none; padding:0;">${data.students.filter(s => s.status === 'active').slice(0,20).map(s => `<li class="list-item">${s.name}</li>`).join('') || '<li>No active students</li>'}</ul>
+            <h4>📚 Subjects (${data.subjects.length})</h4>
+            <ul style="list-style:none; padding:0;">${data.subjects.map(s => `<li class="list-item">${s.name}</li>`).join('')}</ul>
+        `;
+        document.getElementById('modalTitle').innerText = '📊 All School Data';
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('modal').style.display = 'flex';
+    } catch (error) {
+        alert('Failed to load data');
+    }
+}
+
+async function viewReports() {
+    try {
+        const token = localStorage.getItem('raven_token');
+        const response = await fetch(`${BACKEND_URL}/api/attendance?term=${currentTerm}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const attendance = await response.json();
+        
+        let html = `<h4>📥 Recent Attendance Records</h4><div style="max-height:400px; overflow-y:auto;">`;
+        
+        if (attendance.length === 0) {
+            html += '<p>No attendance records yet</p>';
+        } else {
+            attendance.slice(-10).reverse().forEach(a => {
+                const present = a.records?.filter(r => r.status === 'present').length || 0;
+                const absent = a.records?.filter(r => r.status === 'absent').length || 0;
+                html += `<div class="report-card"><strong>${a.date}</strong><br>✅ Present: ${present} | ❌ Absent: ${absent}</div>`;
+            });
+        }
+        
+        html += `</div>`;
+        document.getElementById('modalTitle').innerText = '📊 Attendance Reports';
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('modal').style.display = 'flex';
+    } catch (error) {
+        alert('Failed to load reports');
+    }
+}
+
+async function generateReport() {
+    const classId = document.getElementById('reportClass').value;
+    const studentId = document.getElementById('reportStudent').value;
+    const statusFilter = document.getElementById('reportStatus').value;
+    const startDate = document.getElementById('reportStart').value;
+    const endDate = document.getElementById('reportEnd').value;
+    
+    try {
+        const token = localStorage.getItem('raven_token');
+        let url = `${BACKEND_URL}/api/reports/attendance-summary?term=${currentTerm}`;
+        if (classId) url += `&class_id=${classId}`;
+        if (startDate) url += `&start_date=${startDate}`;
+        if (endDate) url += `&end_date=${endDate}`;
+        
+        const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+        const stats = await response.json();
+        
+        if (stats.length === 0) {
+            document.getElementById('reportResult').innerHTML = '<div class="card">📭 No attendance data</div>';
+            return;
+        }
+        
+        let filtered = stats;
+        if (studentId) filtered = filtered.filter(s => s.studentId == studentId);
+        if (statusFilter) filtered = filtered.filter(s => s[statusFilter] > 0);
+        
+        let html = `<table><thead><tr><th>Student</th><th>Present</th><th>Absent</th><th>Total</th><th>Rate</th></tr></thead><tbody>`;
+        filtered.forEach(s => {
+            html += `<tr><td style="font-weight:600;">${s.studentName}</td><td style="color:#059669">${s.present}</td><td style="color:#dc2626">${s.absent}</td><td><strong>${s.total}</strong></td><td><strong>${s.attendanceRate}%</strong></td></tr>`;
+        });
+        html += `</tbody></table>`;
+        document.getElementById('reportResult').innerHTML = html;
+    } catch (error) {
+        document.getElementById('reportResult').innerHTML = '<div class="card">Error loading report</div>';
+    }
+}
+
+function exportReport() {
+    const reportText = document.getElementById('reportResult').innerText;
+    if(!reportText || reportText.includes('No attendance')) { alert('Generate a report first'); return; }
+    const blob = new Blob([reportText], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `raven_attendance_${currentTerm}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function showChangePasswordModal() {
+    document.getElementById('modalTitle').innerText = 'Change Password';
+    document.getElementById('modalBody').innerHTML = `
+        <input type="password" id="oldPassword" placeholder="Current Password" class="input-field">
+        <input type="password" id="newPassword" placeholder="New Password" class="input-field">
+        <input type="password" id="confirmPassword" placeholder="Confirm New Password" class="input-field">
+        <button onclick="changePassword()" class="btn-primary">Update Password</button>
+    `;
+    document.getElementById('modal').style.display = 'flex';
+}
+
+async function changePassword() {
+    const oldPassword = document.getElementById('oldPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (!oldPassword || !newPassword) {
+        alert('Please fill all fields');
+        return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+        alert('New passwords do not match');
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        alert('Password must be at least 6 characters');
+        return;
+    }
+    
+    try {
+        const token = localStorage.getItem('raven_token');
+        const response = await fetch(`${BACKEND_URL}/api/auth/change-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            alert('✅ Password changed successfully!');
+            closeModal();
+        } else {
+            alert('❌ Error: ' + (data.error || 'Failed to change password'));
+        }
+    } catch (error) {
+        alert('Connection error. Password not changed.');
+    }
+}
+
+// PWA & Initialization
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('✅ SW registered'))
+            .catch(err => console.log('❌ SW registration failed:', err));
+    });
+}
+
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const installBtn = document.getElementById('installAppBtn');
+    if (installBtn) {
+        installBtn.style.display = 'block';
+        installBtn.onclick = () => {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(() => deferredPrompt = null);
+        };
+    }
+});
+
+window.addEventListener('online', () => {
+    const status = document.getElementById('connectionStatus');
+    status.innerHTML = '🟢 Back Online';
+    status.style.background = '#d1fae5';
+    status.style.color = '#065f46';
+    status.style.display = 'block';
+    setTimeout(() => status.style.display = 'none', 3000);
+});
+
+window.addEventListener('offline', () => {
+    const status = document.getElementById('connectionStatus');
+    status.innerHTML = '🔴 Offline - Working in offline mode';
+    status.style.background = '#fee2e2';
+    status.style.color = '#991b1b';
+    status.style.display = 'block';
+});
+
+// Make sure changeTerm is defined for the HTML select
+document.getElementById('currentTerm').addEventListener('change', changeTerm);
+updateTermDisplay();
+console.log('✅ Raven Attendance System Ready');
 			
 			
 	</script>
