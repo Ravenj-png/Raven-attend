@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes, viewport-fit=cover">
     <title>Raven Attendance System</title>
-
-    <!-- PWA Meta -->
     <meta name="theme-color" content="#2563eb">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,7 +12,6 @@
     <link rel="manifest" href="/manifest.json">
 
     <style>
-        /* ============ RESET & BASE ============ */
         * {
             margin: 0;
             padding: 0;
@@ -28,7 +25,6 @@
             padding: 12px;
         }
 
-        /* ============ LAYOUT ============ */
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -43,7 +39,6 @@
             border: 1px solid #e2e8f0;
         }
 
-        /* ============ TYPOGRAPHY ============ */
         h1 {
             color: #0f2b5e;
             text-align: center;
@@ -57,7 +52,6 @@
             font-weight: 600;
         }
 
-        /* ============ FORMS ============ */
         .input-field,
         select.input-field {
             width: 100%;
@@ -75,7 +69,6 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
-        /* ============ BUTTONS ============ */
         .btn-primary,
         .btn-secondary,
         .btn-success,
@@ -125,7 +118,6 @@
             font-weight: 500;
         }
 
-        /* ============ BADGES ============ */
         .badge {
             background: #2563eb;
             color: white;
@@ -153,7 +145,6 @@
             font-weight: 600;
         }
 
-        /* ============ ATTENDANCE BUTTONS ============ */
         .attendance-buttons {
             display: flex;
             gap: 8px;
@@ -210,7 +201,6 @@
             color: white;
         }
 
-        /* ============ COMPONENTS ============ */
         .dashboard-header {
             display: flex;
             justify-content: space-between;
@@ -350,7 +340,6 @@
             overflow-x: auto;
         }
 
-        /* ============ TABLES ============ */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -371,7 +360,6 @@
             font-weight: 700;
         }
 
-        /* ============ MODAL ============ */
         .modal {
             position: fixed;
             top: 0;
@@ -406,7 +394,6 @@
             color: #94a3b8;
         }
 
-        /* ============ STATUS BAR ============ */
         #connectionStatus {
             position: fixed;
             top: 0;
@@ -419,7 +406,6 @@
             font-weight: 600;
         }
 
-        /* ============ RESPONSIVE ============ */
         @media (max-width: 600px) {
             body {
                 padding: 8px;
@@ -449,13 +435,12 @@
     <div id="connectionStatus" style="display:none;"></div>
 
     <div class="container">
-        <!-- ==================== AUTH SCREEN ==================== -->
         <div id="authScreen">
             <div class="card">
-                <h1>🐦‍⬛ RAVEN ATTENDANCE</h1>
+                <h1>RAVEN ATTENDANCE SYSTEM</h1>
 
                 <div class="term-selector">
-                    <h3 style="margin-bottom:10px; text-align:center;">📅 Select Academic Term</h3>
+                    <h3 style="margin-bottom:10px; text-align:center;"> Select Academic Term</h3>
                     <select id="currentTerm" class="input-field">
                         <option value="term1-2026">Term 1 - 2026</option>
                         <option value="term2-2026">Term 2 - 2026</option>
@@ -474,8 +459,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- ==================== DASHBOARD SCREEN ==================== -->
         <div id="dashboardScreen" style="display:none">
            <div class="dashboard-header">
     <div>
@@ -485,41 +468,34 @@
     </div>
     <div style="text-align:right">
         <span id="userRoleBadge" class="badge"></span>
-        <button onclick="showChangePasswordModal()" class="btn-secondary" style="margin-top:8px; margin-right:8px;">🔒 Change Password</button>
-        <button onclick="logout()" class="btn-logout" style="margin-top:8px;">🚪 Logout</button>
+        <button onclick="showChangePasswordModal()" class="btn-secondary" style="margin-top:8px; margin-right:8px;"> Change Password</button>
+        <button onclick="logout()" class="btn-logout" style="margin-top:8px;"> Logout</button>
     </div>
 </div>
-
             <div class="term-notice">
-                📚 Current Term: <span id="currentTermDisplay"></span> | Students must re-register each term
+                 Current Term: <span id="currentTermDisplay"></span> | Students must re-register each term
             </div>
-
             <div id="adminPanel">
-                <!-- Admin Controls -->
                 <div class="card">
-                    <h3>👑 Admin Controls</h3>
+                    <h3> Admin Controls</h3>
                     <div class="flex-buttons">
-                        <button onclick="showAddTeacherModal()" class="btn-secondary">➕ Add Teacher</button>
-                        <button onclick="showRegisterStudentModal()" class="btn-success">📝 Register Student</button>
-                        <button onclick="showUpdateStudentModal()" class="btn-info">🔄 Update Status</button>
-                        <button onclick="showAddClassModal()" class="btn-secondary">🏫 Add Class</button>
-                        <button onclick="showAddSubjectModal()" class="btn-secondary">📚 Add Subject</button>
-                        <button onclick="showAssignSubjectModal()" class="btn-secondary">🔗 Assign Subject</button>
-                        <button onclick="viewAllData()" class="btn-primary">📊 View Data</button>
-                        <button onclick="viewReports()" class="btn-success">📥 Reports</button>
-                        <button onclick="cleanupInactiveStudents()" class="btn-danger">🧹 Cleanup</button>
+                        <button onclick="showAddTeacherModal()" class="btn-secondary"> Add Teacher</button>
+                        <button onclick="showRegisterStudentModal()" class="btn-success"> Register Student</button>
+                        <button onclick="showUpdateStudentModal()" class="btn-info"> Update Status</button>
+                        <button onclick="showAddClassModal()" class="btn-secondary"> Add Class</button>
+                        <button onclick="showAddSubjectModal()" class="btn-secondary"> Add Subject</button>
+                        <button onclick="showAssignSubjectModal()" class="btn-secondary"> Assign Subject</button>
+                        <button onclick="viewAllData()" class="btn-primary"> View Data</button>
+                        <button onclick="viewReports()" class="btn-success"> Reports</button>
+                        <button onclick="cleanupInactiveStudents()" class="btn-danger"> Cleanup</button>
                     </div>
                 </div>
-
-                <!-- Stats -->
                 <div class="card">
-                    <h3>📊 School Overview</h3>
+                    <h3> School Overview</h3>
                     <div id="adminStats" class="stats-grid"></div>
                 </div>
-
-              <!-- Attendance Card - ADD THIS ID -->
 <div class="card" id="attendanceSection">
-    <h3>✅ Take Attendance</h3>
+    <h3> Take Attendance</h3>
     <select id="attClass" class="input-field" onchange="loadSubjectsForClass()">
         <option value="">Select Class</option>
     </select>
@@ -527,18 +503,16 @@
         <option value="">Select Subject</option>
     </select>
     <select id="attSession" class="input-field">
-        <option value="morning">🌅 Morning Session</option>
-        <option value="evening">🌙 Evening Session</option>
+        <option value="morning"> Morning Session</option>
+        <option value="evening"> Evening Session</option>
     </select>
     <input type="date" id="attDate" class="input-field">
     <button onclick="loadStudentsForAttendance()" class="btn-primary">Load Students</button>
     <div id="attendanceList" class="attendance-list"></div>
     <button onclick="saveAttendance()" class="btn-success" id="saveAttendanceBtn" style="display:none">💾 Save Attendance</button>
 </div>
-
-<!-- Reports Card - ADD THIS ID -->
 <div class="card" id="reportsSection">
-    <h3>📈 Attendance Reports</h3>
+    <h3> Attendance Reports</h3>
     <select id="reportClass" class="input-field">
         <option value="">All Classes</option>
     </select>
@@ -555,10 +529,9 @@
     <input type="date" id="reportStart" class="input-field" placeholder="Start Date">
     <input type="date" id="reportEnd" class="input-field" placeholder="End Date">
     <button onclick="generateReport()" class="btn-primary">Generate Report</button>
-    <button onclick="exportReport()" class="btn-secondary">📎 Export CSV</button>
+    <button onclick="exportReport()" class="btn-secondary"> Export CSV</button>
     <div id="reportResult" class="report-result"></div>
 </div>
-    <!-- ==================== MODAL ==================== -->
     <div id="modal" class="modal" style="display:none">
         <div class="modal-content">
             <span class="close" onclick="closeModal()">&times;</span>
@@ -566,24 +539,19 @@
             <div id="modalBody"></div>
         </div>
     </div>
-
-    <!-- ==================== INSTALL PROMPT ==================== -->
     <div id="installPrompt" style="display:none; position:fixed; bottom:20px; right:20px; z-index:1000;">
         <button id="installAppBtn" style="background:#2563eb; color:white; border:none; border-radius:40px; padding:12px 20px; cursor:pointer; font-weight:600;">
-            📱 Install App
+             Install App
         </button>
     </div>
 
     <script>
-			// ============ PART 1: GLOBAL STATE ============
 let currentUser = null;
 let currentTenant = null;
 let currentTerm = 'term1-2026';
 let currentAttendanceMeta = null;
 let attendanceRecordsMap = {};
-
 const BACKEND_URL = 'https://raven-attendance.onrender.com';
-	// ============ PART 2: API CALLS ============
 async function apiCall(endpoint, method = 'GET', body = null) {
     const token = localStorage.getItem('raven_token');
     try {
@@ -595,7 +563,6 @@ async function apiCall(endpoint, method = 'GET', body = null) {
             },
             body: body ? JSON.stringify(body) : null
         });
-        
         if (!response.ok) {
             const error = await response.json();
             throw new Error(error.error || `API error: ${response.status}`);
@@ -606,26 +573,23 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         throw error;
     }
 }
-	// ============ PART 3: AUTHENTICATION FUNCTIONS ============
 function updateTermDisplay() {
     const termSelect = document.getElementById('currentTerm');
     const termText = termSelect.options[termSelect.selectedIndex]?.text || '';
     document.getElementById('currentTermDisplay').innerText = termText;
     if (document.getElementById('termDisplay')) {
-        document.getElementById('termDisplay').innerText = `📅 ${termText}`;
+        document.getElementById('termDisplay').innerText = ` ${termText}`;
     }
 }
-
 function changeTerm() {
     currentTerm = document.getElementById('currentTerm').value;
     updateTermDisplay();
 }
-
 async function login() {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
-    
+   
     if (!email || !password) { 
         errorDiv.innerText = 'Enter email & password'; 
         return; 
@@ -667,9 +631,9 @@ function logout() {
     document.getElementById('loginEmail').value = '';
     document.getElementById('loginPassword').value = '';
 }		
-// ============ PART 4: DASHBOARD FUNCTIONS ============
+		
 async function loadDashboard() {
-    document.getElementById('userNameDisplay').innerHTML = `👋 ${currentUser.name}`;
+    document.getElementById('userNameDisplay').innerHTML = ` ${currentUser.name}`;
     document.getElementById('userRoleBadge').innerHTML = currentUser.role === 'super_admin' ? 'SUPER ADMIN' : currentUser.role === 'classteacher' ? 'CLASS TEACHER' : 'TEACHER';
 
     if (currentTenant) {
@@ -681,7 +645,6 @@ async function loadDashboard() {
 
     const role = currentUser.role;
 
-    // Get all cards
     const adminControlsCard = document.querySelector('#adminPanel .card:first-child');
     const schoolOverviewCard = document.querySelector('#adminPanel .card:nth-child(2)');
     const attendanceCard = document.getElementById('attendanceSection');
@@ -700,32 +663,25 @@ async function loadDashboard() {
         allButtons.forEach(btn => btn.style.display = 'inline-block');
 
     } else if (role === 'classteacher') {
-        // CLASS TEACHER: Can register students, update status, take attendance, view reports
-        // Keep admin card visible but modify it
         if (adminControlsCard) adminControlsCard.style.display = 'block';
         if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';
         if (attendanceCard) attendanceCard.style.display = 'block';
         if (reportsCard) reportsCard.style.display = 'block';
         
-        // Change the title of the card
         const cardTitle = adminControlsCard.querySelector('h3');
-        if (cardTitle) cardTitle.innerText = '📝 Class Teacher Actions';
+        if (cardTitle) cardTitle.innerText = ' Class Teacher Actions';
         
-        // Show flex buttons container
         if (flexButtons) flexButtons.style.display = 'flex';
         
-        // Hide all buttons first
         const allButtons = document.querySelectorAll('.flex-buttons button');
         allButtons.forEach(btn => btn.style.display = 'none');
         
-        // Show ONLY Register Student and Update Status buttons
         const registerBtn = document.querySelector('button[onclick="showRegisterStudentModal()"]');
         const updateBtn = document.querySelector('button[onclick="showUpdateStudentModal()"]');
         if (registerBtn) registerBtn.style.display = 'inline-block';
         if (updateBtn) updateBtn.style.display = 'inline-block';
 
     } else {
-        // TEACHER: Only take attendance and view reports - CANNOT register students
         if (adminControlsCard) adminControlsCard.style.display = 'none';
         if (schoolOverviewCard) schoolOverviewCard.style.display = 'none';
         if (attendanceCard) attendanceCard.style.display = 'block';
@@ -743,7 +699,6 @@ async function loadDashboard() {
 async function loadAdminStats() {
     const role = currentUser.role;
 
-    // Only show stats for admin
     if (role !== 'super_admin' && role !== 'admin') {
         document.getElementById('adminStats').innerHTML = '';
         return;
@@ -842,7 +797,7 @@ async function loadReportFilters() {
         document.getElementById('reportStudent').innerHTML = '<option value="">All Students</option>';
     }
 }
-	// ============ PART 5: ATTENDANCE FUNCTIONS ============
+	
 async function loadStudentsForAttendance() {
     const classId = document.getElementById('attClass').value;
     const subjectId = document.getElementById('attSubject').value;
@@ -863,7 +818,7 @@ async function loadStudentsForAttendance() {
         const attendanceDiv = document.getElementById('attendanceList');
         
         if (classStudents.length === 0) { 
-            attendanceDiv.innerHTML = '<div class="card">⚠️ No active students in this class for current term.</div>'; 
+            attendanceDiv.innerHTML = '<div class="card"> No active students in this class for current term.</div>'; 
             document.getElementById('saveAttendanceBtn').style.display = 'none'; 
             return; 
         }
@@ -883,7 +838,7 @@ async function loadStudentsForAttendance() {
             
             html += `
                 <div class="attendance-item" data-student="${student.id}">
-                    <span class="student-name">📖 ${student.name} <span class="student-status status-active">ACTIVE</span></span>
+                    <span class="student-name"> ${student.name} <span class="student-status status-active">ACTIVE</span></span>
                     <div class="attendance-buttons">
                         <button class="btn-present ${existingStatus === 'present' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'present')">Present</button>
                         <button class="btn-absent ${existingStatus === 'absent' ? 'active' : ''}" onclick="setAttendance(${student.id}, 'absent')">Absent</button>
@@ -941,16 +896,16 @@ async function saveAttendance() {
         });
         
         if (response.ok) {
-            alert('✅ Attendance saved successfully!');
+            alert(' Attendance saved successfully!');
         } else {
             const error = await response.json();
-            alert('❌ Error: ' + (error.error || 'Failed to save'));
+            alert(' Error: ' + (error.error || 'Failed to save'));
         }
     } catch (error) {
         alert('Connection error. Attendance not saved.');
     }
 }
-// ============ PART 6: STUDENT MANAGEMENT FUNCTIONS ============
+
 function closeModal() { 
     document.getElementById('modal').style.display = 'none'; 
 }
@@ -966,7 +921,7 @@ async function showRegisterStudentModal() {
         let classOptions = '<option value="">Select Class</option>';
         classes.forEach(c => { classOptions += `<option value="${c.id}">${c.name}</option>`; });
         
-        document.getElementById('modalTitle').innerText = '📝 Register Student for ' + currentTerm;
+        document.getElementById('modalTitle').innerText = ' Register Student for ' + currentTerm;
         document.getElementById('modalBody').innerHTML = `
             <div class="info-msg" style="margin-bottom:12px">
                 Registering student for: <strong>${currentTerm}</strong><br>
@@ -1012,12 +967,12 @@ async function registerStudent() {
         const data = await response.json();
         
         if (response.ok) {
-            alert(`✅ ${data.message}`);
+            alert(` ${data.message}`);
             closeModal();
             await loadAdminStats();
             await loadReportFilters();
         } else {
-            alert('❌ Error: ' + (data.error || 'Failed to register'));
+            alert(' Error: ' + (data.error || 'Failed to register'));
         }
     } catch (error) {
         alert('Connection error. Student not registered.');
@@ -1044,7 +999,7 @@ async function showUpdateStudentModal() {
         let classOptions = '<option value="">Change Class (optional)</option>';
         classes.forEach(c => { classOptions += `<option value="${c.id}">${c.name}</option>`; });
         
-        document.getElementById('modalTitle').innerText = '🔄 Update Student Status';
+        document.getElementById('modalTitle').innerText = ' Update Student Status';
         document.getElementById('modalBody').innerHTML = `
             <select id="updateStudentId" class="input-field">${studentOptions}</select>
             <select id="updateStudentStatus" class="input-field">
@@ -1088,13 +1043,13 @@ async function updateStudentStatus() {
         });
         
         if (response.ok) {
-            alert('✅ Student status updated');
+            alert(' Student status updated');
             closeModal();
             await loadAdminStats();
             await loadReportFilters();
         } else {
             const error = await response.json();
-            alert('❌ Error: ' + (error.error || 'Update failed'));
+            alert(' Error: ' + (error.error || 'Update failed'));
         }
     } catch (error) {
         alert('Connection error');
@@ -1123,7 +1078,6 @@ async function cleanupInactiveStudents() {
     }
 }			
 
-			// ============ PART 7: TEACHER, CLASS & SUBJECT MANAGEMENT ============
 function showAddTeacherModal() {
     document.getElementById('modalTitle').innerText = 'Add Teacher';
     document.getElementById('modalBody').innerHTML = `
@@ -1134,7 +1088,7 @@ function showAddTeacherModal() {
             <option value="classteacher">Class Teacher</option>
         </select>
         <input type="password" id="teacherPass" placeholder="Password" class="input-field" value="${Math.random().toString(36).substring(2, 10)}">
-        <small style="display:block; margin-top:-5px; margin-bottom:10px; color:#666;">⚠️ Save this password. Teacher can change later.</small>
+        <small style="display:block; margin-top:-5px; margin-bottom:10px; color:#666;"> Save this password. Teacher can change later.</small>
         <button onclick="addTeacher()" class="btn-primary">Add Teacher</button>
     `;
     document.getElementById('modal').style.display = 'flex';
@@ -1163,12 +1117,12 @@ async function addTeacher() {
         });
         
         if (response.ok) {
-            alert(`✅ Teacher added! Email: ${email}`);
+            alert(` Teacher added! Email: ${email}`);
             closeModal();
             await loadAdminStats();
         } else {
             const error = await response.json();
-            alert('❌ Error: ' + (error.error || 'Failed to add teacher'));
+            alert(' Error: ' + (error.error || 'Failed to add teacher'));
         }
     } catch (error) {
         alert('Connection error. Teacher not added.');
@@ -1200,12 +1154,12 @@ async function addClass() {
         });
         
         if (response.ok) {
-            alert('✅ Class created');
+            alert(' Class created');
             closeModal();
             await loadClassesDropdowns();
             await loadAdminStats();
         } else {
-            alert('❌ Failed to create class');
+            alert(' Failed to create class');
         }
     } catch (error) {
         alert('Connection error');
@@ -1237,11 +1191,11 @@ async function addSubject() {
         });
         
         if (response.ok) {
-            alert('✅ Subject added');
+            alert(' Subject added');
             closeModal();
             await loadAdminStats();
         } else {
-            alert('❌ Failed to add subject');
+            alert(' Failed to add subject');
         }
     } catch (error) {
         alert('Connection error');
@@ -1302,16 +1256,16 @@ async function assignSubjectToTeacher() {
         });
         
         if (response.ok) {
-            alert('✅ Subject assigned');
+            alert(' Subject assigned');
             closeModal();
         } else {
-            alert('❌ Assignment failed');
+            alert(' Assignment failed');
         }
     } catch (error) {
         alert('Connection error');
     }
 }
-// ============ PART 8: REPORTS & PWA FUNCTIONS ==========
+
 async function viewAllData() {
     try {
         const token = localStorage.getItem('raven_token');
@@ -1321,20 +1275,20 @@ async function viewAllData() {
         const data = await response.json();
 
         let html = `
-            <h4>👥 Teachers</h4>
+            <h4> Teachers</h4>
             <ul style="list-style:none; padding:0;">
                 ${data.teachers.map(t => `<li class="list-item">${t.name} (${t.email}) - ${t.role} <button onclick="deleteTeacher(${t.id})" class="btn-danger" style="padding:4px 12px; margin-left:10px;">Delete</button></li>`).join('') || '<li>No teachers</li>'}
             </ul>
-            <h4>🏫 Classes</h4>
+            <h4> Classes</h4>
             <ul style="list-style:none; padding:0;">
                 ${data.classes.map(c => `<li class="list-item">${c.name} <button onclick="deleteClass(${c.id})" class="btn-danger" style="padding:4px 12px; margin-left:10px;">Delete</button></li>`).join('') || '<li>No classes</li>'}
             </ul>
-            <h4>📚 Subjects</h4>
+            <h4> Subjects</h4>
             <ul style="list-style:none; padding:0;">
                 ${data.subjects.map(s => `<li class="list-item">${s.name} <button onclick="deleteSubject(${s.id})" class="btn-danger" style="padding:4px 12px; margin-left:10px;">Delete</button></li>`).join('') || '<li>No subjects</li>'}
             </ul>
         `;
-        document.getElementById('modalTitle').innerText = '📊 All School Data';
+        document.getElementById('modalTitle').innerText = ' All School Data';
         document.getElementById('modalBody').innerHTML = html;
         document.getElementById('modal').style.display = 'flex';
     } catch (error) {
@@ -1342,7 +1296,6 @@ async function viewAllData() {
     }
 }
 
-// Delete functions
 async function deleteTeacher(teacherId) {
     if (!confirm('Delete this teacher?')) return;
     try {
@@ -1421,7 +1374,7 @@ async function generateReport() {
         const stats = await response.json();
         
         if (stats.length === 0) {
-            document.getElementById('reportResult').innerHTML = '<div class="card">📭 No attendance data</div>';
+            document.getElementById('reportResult').innerHTML = '<div class="card"> No attendance data</div>';
             return;
         }
         
@@ -1465,7 +1418,7 @@ async function viewReports() {
         });
         const attendance = await response.json();
         
-        let html = `<h4>📥 Recent Attendance Records</h4><div style="max-height:400px; overflow-y:auto;">`;
+        let html = `<h4> Recent Attendance Records</h4><div style="max-height:400px; overflow-y:auto;">`;
         
         if (attendance.length === 0) {
             html += '<p>No attendance records yet</p>';
@@ -1473,12 +1426,12 @@ async function viewReports() {
             attendance.slice(-10).reverse().forEach(a => {
                 const present = a.records?.filter(r => r.status === 'present').length || 0;
                 const absent = a.records?.filter(r => r.status === 'absent').length || 0;
-                html += `<div class="report-card"><strong>${a.date}</strong><br>✅ Present: ${present} | ❌ Absent: ${absent}</div>`;
+                html += `<div class="report-card"><strong>${a.date}</strong><br> Present: ${present} |  Absent: ${absent}</div>`;
             });
         }
         
         html += `</div>`;
-        document.getElementById('modalTitle').innerText = '📊 Attendance Reports';
+        document.getElementById('modalTitle').innerText = ' Attendance Reports';
         document.getElementById('modalBody').innerHTML = html;
         document.getElementById('modal').style.display = 'flex';
     } catch (error) {
@@ -1531,22 +1484,21 @@ async function changePassword() {
         const data = await response.json();
         
         if (response.ok) {
-            alert('✅ Password changed successfully!');
+            alert(' Password changed successfully!');
             closeModal();
         } else {
-            alert('❌ Error: ' + (data.error || 'Failed to change password'));
+            alert(' Error: ' + (data.error || 'Failed to change password'));
         }
     } catch (error) {
         alert('Connection error. Password not changed.');
     }
 }
 
-// PWA & Initialization
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('✅ SW registered'))
-            .catch(err => console.log('❌ SW registration failed:', err));
+            .then(reg => console.log(' SW registered'))
+            .catch(err => console.log(' SW registration failed:', err));
     });
 }
 
@@ -1566,7 +1518,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 window.addEventListener('online', () => {
     const status = document.getElementById('connectionStatus');
-    status.innerHTML = '🟢 Back Online';
+    status.innerHTML = ' Back Online';
     status.style.background = '#d1fae5';
     status.style.color = '#065f46';
     status.style.display = 'block';
@@ -1575,16 +1527,15 @@ window.addEventListener('online', () => {
 
 window.addEventListener('offline', () => {
     const status = document.getElementById('connectionStatus');
-    status.innerHTML = '🔴 Offline - Working in offline mode';
+    status.innerHTML = ' Offline - Working in offline mode';
     status.style.background = '#fee2e2';
     status.style.color = '#991b1b';
     status.style.display = 'block';
 });
 
-// Initialize
 document.getElementById('currentTerm').addEventListener('change', changeTerm);
 updateTermDisplay();
-console.log('✅ Raven Attendance System Ready');
+console.log(' Raven Attendance System Ready');
 
 
 			
