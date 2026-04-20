@@ -26,8 +26,6 @@ ph = PasswordHasher()
 
 limiter = Limiter(get_remote_address, app=app, default_limits=["200 per day", "50 per hour"])
 
-# ============ DATABASE MODELS ============
-
 class Tenant(db.Model):
     __tablename__ = 'tenants'
     id = db.Column(db.Integer, primary_key=True)
@@ -93,8 +91,6 @@ class TeacherAssignment(db.Model):
     assigned_by = db.Column(db.String(255))
     assigned_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# ============ HELPERS ============
-
 def hash_password(password):
     return ph.hash(password)
 
@@ -140,8 +136,6 @@ def admin_only(f):
         return f(*args, **kwargs)
     return decorated
 
-# ============ ERROR HANDLERS ============
-
 @app.errorhandler(500)
 def handle_500(e):
     return jsonify({'error': 'Internal server error'}), 500
@@ -149,8 +143,6 @@ def handle_500(e):
 @app.errorhandler(404)
 def handle_404(e):
     return jsonify({'error': 'Endpoint not found'}), 404
-
-# ============ AUTHENTICATION ============
 
 @app.route('/api/auth/login', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -217,8 +209,6 @@ def change_password():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ============ USERS / TEACHERS ============
-
 @app.route('/api/users/teachers', methods=['POST'])
 @token_required
 @admin_only
@@ -256,8 +246,6 @@ def get_teachers():
     except Exception as e:
         return jsonify([])
 
-# ============ CLASSES ============
-
 @app.route('/api/classes', methods=['POST'])
 @token_required
 @admin_only
@@ -283,8 +271,6 @@ def get_classes():
         return jsonify([{'id': c.id, 'name': c.name} for c in classes])
     except Exception as e:
         return jsonify([])
-
-# ============ SUBJECTS ============
 
 @app.route('/api/subjects', methods=['POST'])
 @token_required
@@ -313,8 +299,6 @@ def get_subjects():
         return jsonify([{'id': s.id, 'name': s.name} for s in subjects])
     except Exception as e:
         return jsonify([])
-
-# ============ STUDENTS ============
 
 @app.route('/api/students', methods=['POST'])
 @token_required
@@ -413,8 +397,6 @@ def cleanup_students():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# ============ TEACHER ASSIGNMENTS ============
-
 @app.route('/api/teacher-assignments', methods=['POST'])
 @token_required
 @admin_only
@@ -455,8 +437,6 @@ def get_assignments():
     except Exception as e:
         return jsonify([])
 
-# ============ DELETE ENDPOINTS ============
-
 @app.route('/api/users/teachers/<int:user_id>', methods=['DELETE'])
 @token_required
 @admin_only
@@ -468,7 +448,6 @@ def delete_teacher(user_id):
     db.session.commit()
     return jsonify({'message': 'Teacher deleted'})
 
-# Delete class
 @app.route('/api/classes/<int:class_id>', methods=['DELETE'])
 @token_required
 @admin_only
@@ -480,7 +459,6 @@ def delete_class(class_id):
     db.session.commit()
     return jsonify({'message': 'Class deleted'})
 
-# Delete subject
 @app.route('/api/subjects/<int:subject_id>', methods=['DELETE'])
 @token_required
 @admin_only
@@ -491,14 +469,6 @@ def delete_subject(subject_id):
     db.session.delete(subj)
     db.session.commit()
     return jsonify({'message': 'Subject deleted'})
-
-# ============ ATTENDANCE ============
-
-
-
-
-
-# ============ ATTENDANCE ============
 
 @app.route('/api/attendance', methods=['POST'])
 @token_required
@@ -570,8 +540,6 @@ def get_attendance():
     except Exception as e:
         return jsonify([])
 
-# ============ REPORTS ============
-
 @app.route('/api/reports/attendance-summary', methods=['GET'])
 @token_required
 def attendance_summary():
@@ -625,8 +593,6 @@ def attendance_summary():
     except Exception as e:
         return jsonify([])
 
-# ============ SCHOOL DATA ============
-
 @app.route('/api/school/data', methods=['GET'])
 @token_required
 def school_data():
@@ -646,19 +612,15 @@ def school_data():
     except Exception as e:
         return jsonify({'teachers': [], 'students': [], 'classes': [], 'subjects': []})
 
-# ============ HOME ============
-
 @app.route('/')
 def home():
     return jsonify({'message': 'Raven Attendance API is running', 'status': 'online'})
 
-# ============ INITIALIZATION ============
 with app.app_context():
     try:
         db.create_all()
-        print("✅ Database tables created")
+        print(" Database tables created")
 
-        # Fix missing columns
         columns_to_add = [
             "class_id INTEGER",
             "tenant_id INTEGER",
@@ -682,8 +644,6 @@ with app.app_context():
             except:
                 pass
 
-        # ============ CREATE SEPARATE TENANTS ============
-
         tenants_data = [
             {"name": "Raven School", "admin_email": "admin1@school.com", "admin_name": "Raven School"},
             {"name": "Eagle School", "admin_email": "admin2@school.com", "admin_name": "Eagle School"},
@@ -691,15 +651,13 @@ with app.app_context():
         ]
 
         for t_data in tenants_data:
-            # Create or get tenant
             tenant = Tenant.query.filter_by(name=t_data["name"]).first()
             if not tenant:
                 tenant = Tenant(name=t_data["name"])
                 db.session.add(tenant)
                 db.session.commit()
-                print(f"✅ Created tenant: {t_data['name']}")
+                print(f" Created tenant: {t_data['name']}")
 
-            # Create admin user with default password pass123
             email = t_data["admin_email"]
             user = User.query.filter_by(email=email).first()
             if not user:
@@ -711,19 +669,19 @@ with app.app_context():
                     tenant_id=tenant.id
                 )
                 db.session.add(user)
-                print(f"✅ Created admin: {email} | Password: pass123 | Tenant: {t_data['name']}")
+                print(f" Created admin: {email} | Password: pass123 | Tenant: {t_data['name']}")
             else:
-                # Update tenant_id
                 user.tenant_id = tenant.id
                 user.name = t_data["admin_name"]
-                print(f"✅ Updated admin: {email} | Tenant: {t_data['name']}")
+                print(f" Updated admin: {email} | Tenant: {t_data['name']}")
 
         db.session.commit()
-        print("✅ Multi-tenant database initialized")
-        print("📝 Default Password for all admins: pass123")
+        print(" Multi-tenant database initialized")
+        print(" Default Password for all admins: pass123")
+        print("Autorized en designed br RAVEN")
 
     except Exception as e:
-        print(f"⚠️ Init error: {e}")
+        print(f" Init error: {e}")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
